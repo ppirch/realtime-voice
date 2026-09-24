@@ -38,3 +38,23 @@ still 5.6–19.2s because (a) the env prompt is uncapped → longer replies befo
 LLM time-to-first-chunk dominates everything (11.8s avg vs 0.3s TTS vs 0.4s STT).
 Next levers: cap reply length via system prompt, shrink first-flush threshold,
 and/or try `/chat/completions` models for faster first tokens.
+
+## Run 2 — realtime system prompt (same 4 examples, 16 turns)
+
+Prompt now forces: spoken Thai only, 1–2 short sentences, no lists/markdown/
+emoji/URLs/symbols, numbers as Thai words, one idea + follow-up per turn.
+
+| Example | First-audio per turn (s) | Avg | Chunks/turn |
+|---|---|---|---|
+| 01 food (5) | 11.4, 10.6, 9.3, 15.9, 23.3 | 14.1 | 2.0 |
+| 02 bangkok (4) | 10.6, 8.4, 8.6, 8.4 | 9.0 | 1.8 |
+| 03 daily (3) | 11.5, 8.3, 5.7 | 8.5 | 1.7 |
+| 04 work (4) | 11.1, 9.9, 15.6, 10.0 | 11.6 | 1.8 |
+| **Overall** | min 5.7 / max 23.3 | **11.2** | **1.8** |
+
+What improved: replies are short and conversational
+(e.g. `สวัสดีครับคุณต้น / วันนี้อยากคุยอะไรดีครับ`), files 30–55% shorter,
+**zero** unspeakable-chunk guard hits (was 4× `'3.'`).
+What did not: first-audio barely moved (11.8s → 11.2s) — shortening replies
+does not reduce time-to-first-chunk, so that wait is server-side, not
+reply-length-bound. Prompt fix buys speakability + shorter turns, not latency.
