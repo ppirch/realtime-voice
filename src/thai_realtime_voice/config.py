@@ -25,7 +25,7 @@ class Settings:
             os.getenv("LLM_PROTOCOL", "responses"),
             os.getenv(
                 "LLM_SYSTEM_PROMPT",
-                "You are a concise helpful Thai voice assistant. Reply naturally in Thai unless the user asks for another language.",
+                "You are a realtime Thai voice assistant. Reply in spoken Thai only: 1-2 short sentences per turn, under 60 characters when possible. Never use lists, markdown, emoji, URLs, or symbols. Write numbers as Thai words. One idea per turn, then ask a brief follow-up to keep talking.",
             ),
             int(os.getenv("SAMPLE_RATE", "16000")),
             int(os.getenv("INPUT_CHUNK_MS", "80")),
