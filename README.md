@@ -38,16 +38,21 @@ Experimental prototype; model-specific STT/TTS backends are kept behind adapters
 ## Install
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e '.[dev,audio]'
+uv venv && uv pip install -e '.[dev,audio,stt-mlx,tts-local]'
 cp .env.example .env
 ```
 
 ## Run
 
 ```bash
-python -m thai_realtime_voice
+uv run thai-voice                    # microphone + speaker
+uv run thai-voice --text             # type turns on stdin, no mic needed
+uv run thai-voice --text --mute      # synthesize but skip playback
+uv run thai-voice --text --max-turns 5 < turns.txt
 ```
 
-The realtime loop is designed for streaming/interruptible operation. The concrete Qwen3-ASR MLX and FastThaiG2P/Kokoro adapters are intentionally isolated from the benchmark suite.
+From OpenCode: `/voice-chat <opening topic>` relays between you and the loop.
+
+Per-turn timings (first-audio, chunks, synth) go to stderr; the transcript goes to stdout.
+
+The realtime loop is designed for streaming operation. Default TTS is local MMS Thai (`facebook/mms-tts-tha`); live STT still needs a streaming backend (`Qwen3ASRStreaming.backend`), measurable offline via `benchmark/asr_benchmark.py` (mlx-qwen3-asr).

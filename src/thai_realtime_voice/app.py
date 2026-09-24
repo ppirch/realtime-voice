@@ -1,3 +1,7 @@
+import argparse
+import sys
+import time
+
 from .config import Settings
 from .audio import Microphone, Speaker
 from .history import ConversationHistory
@@ -7,7 +11,31 @@ from .tts_mms import MMSThaiTTS
 from .text import sentence_chunks
 
 
-def main():
+def parse_args(argv=None):
+    p = argparse.ArgumentParser(description='Realtime Thai voice conversation')
+    p.add_argument('--text', action='store_true',
+                   help='read user turns from stdin instead of the microphone')
+    p.add_argument('--mute', action='store_true',
+                   help='synthesize speech but skip speaker playback')
+    p.add_argument('--max-turns', type=int, default=0,
+                   help='stop after N turns (0 = unlimited)')
+    return p.parse_args(argv)
+
+
+def mic_texts(asr, mic, sample_rate):
+    for event in asr.stream(mic.chunks(), sample_rate=sample_rate):
+        if getattr(event, 'is_final', False) and event.text.strip():
+            yield event.text.strip()
+
+
+def stdin_texts():
+    for line in sys.stdin:
+        if line.strip():
+            yield line.strip()
+
+
+def main(argv=None):
+    args = parse_args(argv)
     s = Settings.from_env()
     if not s.llm_model:
         raise SystemExit("Set LLM_MODEL in .env")
@@ -21,6 +49,7 @@ def main():
     )
     asr = Qwen3ASRStreaming()
     tts = MMSThaiTTS()
+    speaker = None if args.mute else Speaker(s.tts_sample_rate)
     history = ConversationHistory(max_recent=8)
 
     def summarize_older(msgs):
@@ -31,23 +60,44 @@ def main():
         )
         return ''.join(llm.stream([{'role': 'user', 'content': prompt}]))
 
-    print("Thai Realtime Voice — Ctrl-C to quit")
-    with Microphone(s.sample_rate, s.input_chunk_ms) as mic:
-        speaker = Speaker(s.tts_sample_rate)
-        while True:
-            for event in asr.stream(mic.chunks(), sample_rate=s.sample_rate):
-                if not getattr(event, "is_final", False) or not event.text.strip():
-                    continue
+    def handle_turn(text, n):
+        print(f"You: {text}", flush=True)
+        history.add("user", text)
+        t0 = time.time()
+        first, synth_total, n_chunks = -1.0, 0.0, 0
+        answer = ""
+        for chunk in sentence_chunks(llm.stream(history.build(summarize=summarize_older))):
+            if first < 0:
+                first = time.time() - t0
+            print(chunk, end="", flush=True)
+            answer += chunk
+            t1 = time.time()
+            audio = tts.synthesize(chunk)
+            synth_total += time.time() - t1
+            n_chunks += 1
+            if speaker is not None:
+                speaker.play(audio)
+        print(flush=True)
+        history.add("assistant", answer)
+        total = time.time() - t0
+        print(f"[turn {n}] first-audio {first:.1f}s | {n_chunks} chunks | "
+              f"synth {synth_total:.1f}s | total {total:.1f}s",
+              file=sys.stderr, flush=True)
+        return answer.strip() != ""
 
-                text = event.text.strip()
-                print(f"You: {text}")
-                history.add("user", text)
-
-                answer = ""
-                for chunk in sentence_chunks(llm.stream(history.build(summarize=summarize_older))):
-                    print(chunk, end="", flush=True)
-                    answer += chunk
-                    speaker.play(tts.synthesize(chunk))
-
-                print()
-                history.add("assistant", answer)
+    print("Thai Realtime Voice — Ctrl-C to quit", file=sys.stderr)
+    n = 0
+    if args.text:
+        source = stdin_texts()
+        for text in source:
+            n += 1
+            handle_turn(text, n)
+            if args.max_turns and n >= args.max_turns:
+                break
+    else:
+        with Microphone(s.sample_rate, s.input_chunk_ms) as mic:
+            for text in mic_texts(asr, mic, s.sample_rate):
+                n += 1
+                handle_turn(text, n)
+                if args.max_turns and n >= args.max_turns:
+                    break
