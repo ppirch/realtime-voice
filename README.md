@@ -13,7 +13,7 @@ The default configuration is:
 - protocol: OpenAI Responses API
 - SDK compatibility: `@ai-sdk/openai`
 
-OpenCode lists Muse Spark 1.3 Contributor on the Go endpoint as a Responses API model with `@ai-sdk/openai`. citeturn611406view0turn135984search1
+OpenCode lists Muse Spark 1.3 Contributor on the Go endpoint as a Responses API model with `@ai-sdk/openai`.
 
 Create `.env` from `.env.example` and put your key in:
 
@@ -23,7 +23,7 @@ OPENCODE_API_KEY=your_key_here
 
 You can also set `LLM_API_KEY`; that value takes precedence over `OPENCODE_API_KEY`.
 
-The client consumes `response.output_text.delta` events from the Responses stream, so the LLM side can start flowing text before the full answer is complete. citeturn629523search0
+The client consumes `response.output_text.delta` events from the Responses stream, so the LLM side can start flowing text before the full answer is complete.
 
 ## Layout
 
