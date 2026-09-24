@@ -1,4 +1,5 @@
 import json
+import uuid
 
 import httpx
 
@@ -6,7 +7,7 @@ import httpx
 class StreamingLLM:
     """Streaming LLM client for OpenAI Chat Completions and Responses APIs."""
 
-    def __init__(self, base_url, api_key, model, system_prompt, protocol="responses"):
+    def __init__(self, base_url, api_key, model, system_prompt, protocol="responses", session_id=None):
         self.protocol = protocol
         self.url = base_url.rstrip("/")
         if protocol == "chat_completions":
@@ -16,9 +17,14 @@ class StreamingLLM:
         else:
             raise ValueError("LLM_PROTOCOL must be 'responses' or 'chat_completions'")
         self.api_key, self.model, self.system_prompt = api_key, model, system_prompt
+        self.session_id = session_id or str(uuid.uuid4())
 
     def stream(self, messages):
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "thai-realtime-voice/0.1.0",
+            "x-opencode-session": self.session_id,
+        }
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 

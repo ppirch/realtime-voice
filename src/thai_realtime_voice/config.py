@@ -20,7 +20,7 @@ class Settings:
         load_dotenv()
         return cls(
             os.getenv("LLM_BASE_URL", "http://localhost:8000/v1").rstrip("/"),
-            os.getenv("LLM_API_KEY", os.getenv("OPENCODE_API_KEY", "")),
+            os.getenv("LLM_API_KEY") or os.getenv("OPENCODE_API_KEY", ""),
             os.getenv("LLM_MODEL", ""),
             os.getenv("LLM_PROTOCOL", "responses"),
             os.getenv(
