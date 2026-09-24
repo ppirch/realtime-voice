@@ -3,7 +3,7 @@ from .audio import Microphone, Speaker
 from .history import ConversationHistory
 from .llm import StreamingLLM
 from .stt import Qwen3ASRStreaming
-from .tts import FastThaiG2PKokoro
+from .tts_mms import MMSThaiTTS
 from .text import sentence_chunks
 
 
@@ -20,7 +20,7 @@ def main():
         protocol=s.llm_protocol,
     )
     asr = Qwen3ASRStreaming()
-    tts = FastThaiG2PKokoro()
+    tts = MMSThaiTTS()
     history = ConversationHistory(max_recent=8)
 
     def summarize_older(msgs):
