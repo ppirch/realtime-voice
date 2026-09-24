@@ -5,6 +5,7 @@ Model weights download from HuggingFace Hub on first use (~40 MB).
 """
 
 import numpy as np
+import sys
 
 TARGET_SR = 24000
 
@@ -21,9 +22,19 @@ class MMSThaiTTS:
         self.model_sr = self.model.config.sampling_rate
 
     def synthesize(self, text):
-        ids = self.tokenizer(text, return_tensors='pt').to(self.device)
-        with self._torch.no_grad():
-            wav = self.model(**ids).waveform.cpu().numpy().squeeze().astype(np.float32)
+        if not text or not text.strip():
+            return np.zeros(int(TARGET_SR * 0.1), dtype=np.float32)
+        try:
+            ids = self.tokenizer(text, return_tensors='pt').to(self.device)
+            with self._torch.no_grad():
+                wav = self.model(**ids).waveform.cpu().numpy().squeeze().astype(np.float32)
+        except RuntimeError as e:
+            # Degenerate token sequence (e.g. non-Thai-only input like
+            # 'Sure!'): VITS attention overflows. Degrade to silence
+            # instead of crashing the voice loop.
+            print(f'MMSThaiTTS: skipping unspeakable chunk {text!r:.40}: {e}',
+                  file=sys.stderr)
+            return np.zeros(int(TARGET_SR * 0.1), dtype=np.float32)
         if self.model_sr != TARGET_SR:
             n = int(len(wav) * TARGET_SR / self.model_sr)
             wav = np.interp(
