@@ -1,5 +1,6 @@
 from .config import Settings
 from .audio import Microphone, Speaker
+from .history import ConversationHistory
 from .llm import StreamingLLM
 from .stt import Qwen3ASRStreaming
 from .tts import FastThaiG2PKokoro
@@ -20,7 +21,15 @@ def main():
     )
     asr = Qwen3ASRStreaming()
     tts = FastThaiG2PKokoro()
-    history = []
+    history = ConversationHistory(max_recent=8)
+
+    def summarize_older(msgs):
+        joined = '\n'.join(f"{m['role']}: {m['content']}" for m in msgs)
+        prompt = (
+            'สรุปบทสนทนาต่อไปนี้สั้นๆ ไม่เกิน 80 คำ เป็นภาษาไทย '
+            'เน้นชื่อผู้ใช้ ความชอบ และเรื่องที่ค้างอยู่:\n' + joined
+        )
+        return ''.join(llm.stream([{'role': 'user', 'content': prompt}]))
 
     print("Thai Realtime Voice — Ctrl-C to quit")
     with Microphone(s.sample_rate, s.input_chunk_ms) as mic:
@@ -32,13 +41,13 @@ def main():
 
                 text = event.text.strip()
                 print(f"You: {text}")
-                history.append({"role": "user", "content": text})
+                history.add("user", text)
 
                 answer = ""
-                for chunk in sentence_chunks(llm.stream(history)):
+                for chunk in sentence_chunks(llm.stream(history.build(summarize=summarize_older))):
                     print(chunk, end="", flush=True)
                     answer += chunk
                     speaker.play(tts.synthesize(chunk))
 
                 print()
-                history.append({"role": "assistant", "content": answer})
+                history.add("assistant", answer)
