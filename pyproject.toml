@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "thai-realtime-voice"
+version = "0.1.0"
+description = "Realtime Thai voice conversation on Apple Silicon"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.26", "python-dotenv>=1.0", "httpx>=0.27"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+audio = ["sounddevice>=0.5"]
+
+[project.scripts]
+thai-voice = "thai_realtime_voice.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
