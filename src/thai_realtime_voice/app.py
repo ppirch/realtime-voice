@@ -80,8 +80,15 @@ def mic_check(mic):
     return floor
 
 
+LISTENING_MSG = "[listening — speak, then pause ~1s to send]"
+
+
 def stdin_texts():
-    for line in sys.stdin:
+    while True:
+        print("> ", file=sys.stderr, end="", flush=True)
+        line = sys.stdin.readline()
+        if not line:
+            break
         if line.strip():
             yield line.strip()
 
@@ -99,8 +106,10 @@ def main(argv=None):
         with Microphone(s.sample_rate, s.input_chunk_ms) as mic:
             floor = mic_check(mic)
             asr = Qwen3ASRStreaming(backend=backend_cls(silence_rms=endpoint_threshold(floor)))
+            print(LISTENING_MSG, file=sys.stderr, flush=True)
             for text in mic_texts(asr, mic, s.sample_rate):
                 print(text, flush=True)
+                print(LISTENING_MSG, file=sys.stderr, flush=True)
         return
 
     if not s.llm_model:
@@ -181,6 +190,7 @@ def main(argv=None):
             print(f"endpoint threshold: {endpoint_threshold(floor):.3f}",
                   file=sys.stderr, flush=True)
             asr = Qwen3ASRStreaming(backend=backend_cls(silence_rms=endpoint_threshold(floor)))
+            print(LISTENING_MSG, file=sys.stderr, flush=True)
             for text in mic_texts(asr, mic, s.sample_rate):
                 n += 1
                 handle_turn(text, n)
@@ -190,3 +200,4 @@ def main(argv=None):
                 # Let the reverb tail arrive, then drop it before listening.
                 time.sleep(0.4)
                 mic.flush()
+                print(LISTENING_MSG, file=sys.stderr, flush=True)
