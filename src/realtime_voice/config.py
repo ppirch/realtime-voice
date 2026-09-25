@@ -1,8 +1,7 @@
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 
 from dotenv import load_dotenv
-
 
 TH_SYSTEM_PROMPT = (
     "You are a realtime Thai voice assistant. Reply in spoken Thai only: "
@@ -33,6 +32,17 @@ PRESET_LANG = {"ielts": "en"}
 # so the preset tolerates longer pauses and much longer turns.
 # Explicit --silence-ms / --max-utterance-s flags still win over these.
 PRESET_ENDPOINT = {"ielts": {"silence_ms": 2500, "max_utterance_s": 120}}
+
+VOICE_BANNER = {
+    "th": "Loading speech models (MMS Thai TTS + Qwen3-ASR MLX)...",
+    "en": "Loading speech models (Kokoro English TTS + Parakeet MLX STT)...",
+}
+VOICE_SUMMARY = {
+    "th": ('สรุปบทสนทนาต่อไปนี้สั้นๆ ไม่เกิน 80 คำ เป็นภาษาไทย '
+           'เน้นชื่อผู้ใช้ ความชอบ และเรื่องที่ค้างอยู่:\n'),
+    "en": ('Summarize the following conversation briefly in English, '
+           'max 80 words, keeping names, preferences, and open items:\n'),
+}
 
 
 @dataclass(frozen=True)

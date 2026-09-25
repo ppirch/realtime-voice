@@ -1,7 +1,11 @@
 from realtime_voice.app import (
-    build_backend, listening_msg, parse_args, resolve_endpoint, resolve_lang_prompt,
+    build_backend,
+    listening_msg,
+    parse_args,
+    resolve_endpoint,
+    resolve_lang_prompt,
 )
-from realtime_voice.config import EN_SYSTEM_PROMPT, Settings, TH_SYSTEM_PROMPT
+from realtime_voice.config import EN_SYSTEM_PROMPT, TH_SYSTEM_PROMPT, Settings
 from realtime_voice.stt_mlx import Utterance
 
 
@@ -61,6 +65,7 @@ def test_listening_msg_shows_pause():
 
 def test_live_flag_selects_streaming_backend():
     from unittest.mock import patch
+
     from realtime_voice.stt_live import LiveWhisperMLXBackend
     from realtime_voice.stt_mlx import Qwen3ASRMLXBackend
     s = _settings()
@@ -113,3 +118,17 @@ def test_mic_texts_ignores_previews_without_callback():
             return iter([])
 
     assert list(mic_texts(FakeASR(), FakeMic(), 16000)) == ["hello"]
+
+
+def test_build_voice_dispatches_per_language():
+    from unittest.mock import patch
+
+    from realtime_voice.app import build_voice
+    from realtime_voice.stt_mlx import Qwen3ASRMLXBackend
+    from realtime_voice.stt_parakeet import ParakeetMLXBackend
+    with patch("realtime_voice.app.KokoroTTS") as kokoro, \
+         patch("realtime_voice.app.MMSThaiTTS") as mms:
+        cls, tts = build_voice(_settings(lang="en"))
+        assert cls is ParakeetMLXBackend and tts is kokoro.return_value
+        cls, tts = build_voice(_settings(lang="th"))
+        assert cls is Qwen3ASRMLXBackend and tts is mms.return_value

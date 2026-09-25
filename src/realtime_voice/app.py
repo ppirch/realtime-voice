@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import os
 import sys
 import time
@@ -14,16 +15,15 @@ warnings.filterwarnings(
     message=".*(torch\\.jit\\.script|weight_norm|dropout option adds dropout|unauthenticated requests).*",
 )
 
-from .config import Settings
 from .audio import Microphone, Speaker
+from .config import VOICE_BANNER, VOICE_SUMMARY, Settings
 from .history import ConversationHistory
 from .llm import StreamingLLM
-from .stt import Qwen3ASRStreaming
 from .stt_mlx import Qwen3ASRMLXBackend, endpoint_threshold
 from .stt_parakeet import ParakeetMLXBackend
-from .tts_mms import MMSThaiTTS
-from .tts_kokoro import KokoroTTS
 from .text import sentence_chunks
+from .tts_kokoro import KokoroTTS
+from .tts_mms import MMSThaiTTS
 
 
 def parse_args(argv=None):
@@ -76,8 +76,8 @@ def resolve_endpoint(args, s):
     return silence_ms, max_utterance_s
 
 
-def mic_texts(asr, mic, sample_rate, on_preview=None):
-    for event in asr.stream(mic.chunks(), sample_rate=sample_rate):
+def mic_texts(backend, mic, sample_rate, on_preview=None):
+    for event in backend.stream(mic.chunks(), sample_rate=sample_rate):
         if not event.text.strip():
             continue
         if getattr(event, 'is_final', True):
@@ -93,6 +93,56 @@ def show_preview(text):
 
 def clear_preview():
     print("\r\x1b[K", end="", file=sys.stderr, flush=True)
+
+
+@contextlib.contextmanager
+def mic_session(args, s, backend_cls):
+    """Mic + calibrated backend. Owns setup; the caller runs the turns."""
+    silence_ms, max_utterance_s = resolve_endpoint(args, s)
+    with Microphone(s.sample_rate, s.input_chunk_ms,
+                     qsize=200 if args.live else 32) as mic:
+        floor = mic_check(mic)
+        threshold = endpoint_threshold(floor)
+        print(f"endpoint threshold: {threshold:.3f}",
+              file=sys.stderr, flush=True)
+        backend = build_backend(args, s, backend_cls, threshold,
+                                silence_ms, max_utterance_s)
+        if args.live:
+            print("live captions on — words appear as you speak",
+                  file=sys.stderr, flush=True)
+        yield backend, mic, silence_ms
+
+
+def run_mic_loop(args, backend, mic, sample_rate, silence_ms,
+                 on_turn, settle, on_preview=None):
+    """Shared turn loop: previews, dispatch, optional half-duplex settle.
+
+    settle (sleep + flush) exists because the mic hears our own speaker;
+    only the speaking loop needs it.
+    """
+    if on_preview is None:
+        on_preview = show_preview if args.live else None
+    print(listening_msg(silence_ms), file=sys.stderr, flush=True)
+    n = 0
+    for text in mic_texts(backend, mic, sample_rate, on_preview=on_preview):
+        clear_preview()
+        n += 1
+        on_turn(text, n)
+        if args.max_turns and n >= args.max_turns:
+            break
+        if settle:
+            # Half-duplex: let the reverb tail arrive, then drop it.
+            time.sleep(0.4)
+            mic.flush()
+        print(listening_msg(silence_ms), file=sys.stderr, flush=True)
+    return n
+
+
+def build_voice(s):
+    """STT adapter class + TTS instance for a language. One row per lang."""
+    if s.voice_lang == "en":
+        return ParakeetMLXBackend, KokoroTTS()
+    return Qwen3ASRMLXBackend, MMSThaiTTS()
 
 
 def build_backend(args, s, backend_cls, threshold, silence_ms, max_utterance_s):
@@ -149,27 +199,16 @@ def main(argv=None):
     s = Settings.from_env()
     voice_lang, system_prompt = resolve_lang_prompt(args, s)
     s = replace(s, voice_lang=voice_lang, system_prompt=system_prompt)
-    silence_ms, max_utterance_s = resolve_endpoint(args, s)
 
     if args.stt_only:
-        backend_cls = ParakeetMLXBackend if s.voice_lang == "en" else Qwen3ASRMLXBackend
+        backend_cls, _ = build_voice(s)
+        silence_ms, _ = resolve_endpoint(args, s)
         print(f"STT-only mode — speak, pause ~{silence_ms / 1000:g}s to finalize, Ctrl-C to quit",
               file=sys.stderr)
-        with Microphone(s.sample_rate, s.input_chunk_ms,
-                         qsize=200 if args.live else 32) as mic:
-            floor = mic_check(mic)
-            asr = Qwen3ASRStreaming(backend=build_backend(
-                args, s, backend_cls, endpoint_threshold(floor),
-                silence_ms, max_utterance_s))
-            if args.live:
-                print("live captions on — words appear as you speak",
-                      file=sys.stderr, flush=True)
-            print(listening_msg(silence_ms), file=sys.stderr, flush=True)
-            for text in mic_texts(asr, mic, s.sample_rate,
-                                  on_preview=show_preview if args.live else None):
-                clear_preview()
-                print(text, flush=True)
-                print(listening_msg(silence_ms), file=sys.stderr, flush=True)
+        with mic_session(args, s, backend_cls) as (backend, mic, silence_ms):
+            run_mic_loop(args, backend, mic, s.sample_rate, silence_ms,
+                         on_turn=lambda text, n: print(text, flush=True),
+                         settle=False)
         return
 
     if not s.llm_model:
@@ -184,24 +223,9 @@ def main(argv=None):
         max_tokens=s.max_tokens,
         reasoning_effort=s.reasoning_effort or None,
     )
-    if s.voice_lang == "en":
-        print("Loading speech models (Kokoro English TTS + Parakeet MLX STT)...",
-              file=sys.stderr, flush=True)
-        backend_cls = ParakeetMLXBackend
-        tts = KokoroTTS()
-        summarize_instruction = (
-            'Summarize the following conversation briefly in English, '
-            'max 80 words, keeping names, preferences, and open items:\n'
-        )
-    else:
-        print("Loading speech models (MMS Thai TTS + Qwen3-ASR MLX)...",
-              file=sys.stderr, flush=True)
-        backend_cls = Qwen3ASRMLXBackend
-        tts = MMSThaiTTS()
-        summarize_instruction = (
-            'สรุปบทสนทนาต่อไปนี้สั้นๆ ไม่เกิน 80 คำ เป็นภาษาไทย '
-            'เน้นชื่อผู้ใช้ ความชอบ และเรื่องที่ค้างอยู่:\n'
-        )
+    print(VOICE_BANNER[s.voice_lang], file=sys.stderr, flush=True)
+    backend_cls, tts = build_voice(s)
+    summarize_instruction = VOICE_SUMMARY[s.voice_lang]
     speaker = None if args.mute else Speaker(s.tts_sample_rate)
     history = ConversationHistory(max_recent=8)
 
@@ -246,27 +270,7 @@ def main(argv=None):
             if args.max_turns and n >= args.max_turns:
                 break
     else:
-        with Microphone(s.sample_rate, s.input_chunk_ms,
-                         qsize=200 if args.live else 32) as mic:
-            floor = mic_check(mic)
-            print(f"endpoint threshold: {endpoint_threshold(floor):.3f}",
-                  file=sys.stderr, flush=True)
-            asr = Qwen3ASRStreaming(backend=build_backend(
-                args, s, backend_cls, endpoint_threshold(floor),
-                silence_ms, max_utterance_s))
-            if args.live:
-                print("live captions on — words appear as you speak",
-                      file=sys.stderr, flush=True)
-            print(listening_msg(silence_ms), file=sys.stderr, flush=True)
-            for text in mic_texts(asr, mic, s.sample_rate,
-                                  on_preview=show_preview if args.live else None):
-                clear_preview()
-                n += 1
-                handle_turn(text, n)
-                if args.max_turns and n >= args.max_turns:
-                    break
-                # Half-duplex: the mic hears our own speaker during playback.
-                # Let the reverb tail arrive, then drop it before listening.
-                time.sleep(0.4)
-                mic.flush()
-                print(listening_msg(silence_ms), file=sys.stderr, flush=True)
+        with mic_session(args, s, backend_cls) as (backend, mic, silence_ms):
+            run_mic_loop(args, backend, mic, s.sample_rate, silence_ms,
+                         on_turn=lambda text, n: handle_turn(text, n),
+                         settle=True)

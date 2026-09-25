@@ -12,7 +12,7 @@ and we only need the buffer logic plus one transcribe call.
 
 import numpy as np
 
-from .stt_mlx import MODEL_SR, Utterance
+from .stt_endpoint import MODEL_SR, Endpointer, Utterance, resample
 
 MODEL_ID = 'mlx-community/whisper-large-v3-turbo'
 LIVE_EVERY_S = 2.0  # re-decode cadence while speech is arriving
@@ -33,7 +33,7 @@ class HypothesisBuffer:
         self.new = [(a, b, t) for a, b, t in new
                     if a > self.last_commited_time - 0.1]
         if len(self.new) >= 1:
-            a, b, t = self.new[0]
+            a, _b, _t = self.new[0]
             if abs(a - self.last_commited_time) < 1 and self.commited_in_buffer:
                 cn, nn = len(self.commited_in_buffer), len(self.new)
                 for i in range(1, min(min(cn, nn), 5) + 1):
@@ -70,8 +70,8 @@ class MLXTranscriber:
     """Thin wrapper over mlx_whisper returning [(start, end, word)]."""
 
     def __init__(self, model_id=MODEL_ID, language='th'):
-        from mlx_whisper.transcribe import ModelHolder, transcribe
         import mlx.core as mx
+        from mlx_whisper.transcribe import ModelHolder, transcribe
         ModelHolder.get_model(model_id, mx.float16)
         self._transcribe = transcribe
         self.model_id, self.language = model_id, language
@@ -117,7 +117,8 @@ class LiveWhisperMLXBackend:
         buf = np.array([], dtype=np.float32)
         offset = 0.0
         hb, parts = HypothesisBuffer(), []
-        speech_ms, silent_ms, turn_s = 0.0, 0.0, 0.0
+        ep = Endpointer(self.silence_rms, self.silence_ms,
+                        self.min_speech_ms, self.max_utterance_s)
         since_tick, speech_since_tick = 0.0, False
         last_preview = ""
 
@@ -128,21 +129,11 @@ class LiveWhisperMLXBackend:
             return ("".join(parts) + tail).strip()
 
         for chunk in audio_chunks:
-            x = np.asarray(chunk, dtype=np.float32).ravel()
-            if sample_rate != MODEL_SR:
-                n = int(len(x) * MODEL_SR / sample_rate)
-                x = np.interp(np.arange(n),
-                              np.arange(len(x)) * (MODEL_SR / sample_rate),
-                              x).astype(np.float32)
+            x = resample(chunk, sample_rate)
             dur_ms = len(x) / MODEL_SR * 1000
             buf = np.append(buf, x)
-            turn_s += dur_ms / 1000
-            if float(np.sqrt((x ** 2).mean())) >= self.silence_rms:
-                speech_ms += dur_ms
-                silent_ms = 0.0
-                speech_since_tick = True
-            else:
-                silent_ms += dur_ms
+            done = ep.feed(x)
+            speech_since_tick = speech_since_tick or ep.is_speech(x)
             since_tick += dur_ms / 1000
 
             # Trim the decode window so each iteration stays ~1-2s; confirmed
@@ -156,9 +147,9 @@ class LiveWhisperMLXBackend:
                     buf = buf[int((cut - offset) * MODEL_SR):]
                     offset = cut
 
-            if (speech_ms >= self.min_speech_ms and speech_since_tick
+            if (ep.speech_ms >= self.min_speech_ms and speech_since_tick
                     and since_tick >= self.live_every_s
-                    and turn_s < self.max_utterance_s):
+                    and ep.total_s < self.max_utterance_s):
                 for _, _, t in self._decode(hb, buf, offset):
                     parts.append(t)
                 since_tick, speech_since_tick = 0.0, False
@@ -167,9 +158,6 @@ class LiveWhisperMLXBackend:
                     last_preview = text
                     yield Utterance(text, is_final=False)
 
-            done = (speech_ms >= self.min_speech_ms and silent_ms >= self.silence_ms)
-            done = done or (turn_s >= self.max_utterance_s
-                            and speech_ms >= self.min_speech_ms)
             if done:
                 for _, _, t in self._decode(hb, buf, offset):
                     parts.append(t)
@@ -177,7 +165,7 @@ class LiveWhisperMLXBackend:
                 offset += len(buf) / MODEL_SR
                 buf = np.array([], dtype=np.float32)
                 hb, parts = HypothesisBuffer(), []
-                speech_ms, silent_ms, turn_s = 0.0, 0.0, 0.0
+                ep.reset()
                 since_tick, speech_since_tick = 0.0, False
                 last_preview = ""
                 if text:

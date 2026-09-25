@@ -1,8 +1,8 @@
-"""Live STT backend: Parakeet-TDT (MLX) with energy-based endpointing.
+"""STT adapter: Parakeet-TDT (MLX) transcribes turns found by the shared endpointer.
 
-Same utterance protocol as the Qwen3 backend: accumulate mic chunks,
-finalize on trailing silence, transcribe the utterance from a temp WAV
-(Parakeet takes file paths). English-first model.
+Same utterance protocol as the Qwen3 adapter; only transcription differs
+(Parakeet takes file paths, so each turn goes through a temp WAV).
+English-first model.
 """
 
 import os
@@ -11,29 +11,17 @@ import wave
 
 import numpy as np
 
-from .stt_mlx import MODEL_SR, Utterance
+from .stt_endpoint import MODEL_SR, Endpointer, utterance_stream
 
 
-class ParakeetMLXBackend:
-    def __init__(self, model_id='mlx-community/parakeet-tdt-0.6b-v2',
-                 silence_rms=0.02, silence_ms=800, min_speech_ms=400,
-                 max_utterance_s=15):
+class ParakeetTranscriber:
+    """Turn audio (list of MODEL_SR chunks) -> text. Weights load here."""
+
+    def __init__(self, model_id='mlx-community/parakeet-tdt-0.6b-v2'):
         from parakeet_mlx import from_pretrained
         self.model = from_pretrained(model_id)
-        self.silence_rms = silence_rms
-        self.silence_ms = silence_ms
-        self.min_speech_ms = min_speech_ms
-        self.max_utterance_s = max_utterance_s
 
-    def _resample(self, chunk, sample_rate):
-        x = np.asarray(chunk, dtype=np.float32).ravel()
-        if sample_rate == MODEL_SR:
-            return x
-        n = int(len(x) * MODEL_SR / sample_rate)
-        return np.interp(np.arange(n),
-                         np.arange(len(x)) * (MODEL_SR / sample_rate), x).astype(np.float32)
-
-    def _transcribe(self, buf):
+    def __call__(self, buf):
         audio = np.concatenate(buf)
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
             path = f.name
@@ -47,22 +35,15 @@ class ParakeetMLXBackend:
         finally:
             os.unlink(path)
 
+
+class ParakeetMLXBackend:
+    def __init__(self, model_id='mlx-community/parakeet-tdt-0.6b-v2',
+                 silence_rms=0.02, silence_ms=800, min_speech_ms=400,
+                 max_utterance_s=15, transcriber=None):
+        self.transcriber = transcriber or ParakeetTranscriber(model_id)
+        self.endpoint = Endpointer(silence_rms, silence_ms,
+                                   min_speech_ms, max_utterance_s)
+
     def stream(self, audio_chunks, sample_rate=16000):
-        buf, speech_ms, silent_ms = [], 0.0, 0.0
-        for chunk in audio_chunks:
-            x = self._resample(chunk, sample_rate)
-            dur_ms = len(x) / MODEL_SR * 1000
-            buf.append(x)
-            if float(np.sqrt((x ** 2).mean())) >= self.silence_rms:
-                speech_ms += dur_ms
-                silent_ms = 0.0
-            else:
-                silent_ms += dur_ms
-            total_s = sum(len(b) for b in buf) / MODEL_SR
-            done = (speech_ms >= self.min_speech_ms and silent_ms >= self.silence_ms)
-            done = done or (total_s >= self.max_utterance_s and speech_ms >= self.min_speech_ms)
-            if done:
-                text = self._transcribe(buf)
-                buf, speech_ms, silent_ms = [], 0.0, 0.0
-                if text:
-                    yield Utterance(text)
+        yield from utterance_stream(audio_chunks, sample_rate,
+                                    self.endpoint, self.transcriber)
