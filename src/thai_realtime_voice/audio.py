@@ -27,6 +27,11 @@ class Microphone:
         if self.stream: self.stream.stop(); self.stream.close()
     def chunks(self):
         while True: yield self.q.get()
+    def flush(self):
+        """Drop everything captured so far (e.g. the speaker's own echo)."""
+        while True:
+            try: self.q.get_nowait()
+            except queue.Empty: break
 
 class Speaker:
     def __init__(self, sample_rate=24000):

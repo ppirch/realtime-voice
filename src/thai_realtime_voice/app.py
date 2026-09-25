@@ -103,3 +103,7 @@ def main(argv=None):
                 handle_turn(text, n)
                 if args.max_turns and n >= args.max_turns:
                     break
+                # Half-duplex: the mic hears our own speaker during playback.
+                # Let the reverb tail arrive, then drop it before listening.
+                time.sleep(0.4)
+                mic.flush()
