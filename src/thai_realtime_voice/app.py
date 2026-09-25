@@ -156,6 +156,7 @@ def main(argv=None):
         t0 = time.time()
         first, synth_total, n_chunks = -1.0, 0.0, 0
         answer = ""
+        print("Agent: ", end="", flush=True)
         for chunk in sentence_chunks(llm.stream(history.build(summarize=summarize_older))):
             if first < 0:
                 first = time.time() - t0
