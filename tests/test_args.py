@@ -129,3 +129,14 @@ def test_build_voice_dispatches_per_language():
     # factories, not instances: --stt-only must never load TTS weights
     assert build_voice(_settings(lang="en")) == (ParakeetMLXBackend, KokoroTTS)
     assert build_voice(_settings(lang="th")) == (Qwen3ASRMLXBackend, MMSThaiTTS)
+
+
+def test_ielts_director_note_fires_at_part_boundaries():
+    from realtime_voice.config import ielts_director_note
+    assert ielts_director_note(1) is None
+    assert ielts_director_note(3) is None
+    assert "Part 2" in ielts_director_note(4)
+    assert ielts_director_note(5) is None
+    assert "Part 3" in ielts_director_note(7)
+    assert ielts_director_note(8) is None
+    assert "band scores" in ielts_director_note(12)

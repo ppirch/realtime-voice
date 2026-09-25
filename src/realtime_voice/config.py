@@ -24,8 +24,31 @@ IELTS_EXAMINER_PROMPT = (
     "Ask exactly one question per turn and wait. Keep every message under 40 words: "
     "plain speakable sentences only, no lists, markdown, emoji, or symbols. "
     "Do not correct or score until asked; when asked, give band scores for fluency, "
-    "vocabulary, grammar, and pronunciation with one tip each."
+    "vocabulary, grammar, and pronunciation with one tip each. "
+    "Track which part you are in and never go back to an earlier part. "
+    "Director notes may arrive as system messages; obey them immediately."
 )
+IELTS_PART1_END = 4  # user turns: Part 1 Q&A, then cue card
+IELTS_PART2_END = 7  # + long answer and 2 follow-ups, then Part 3
+IELTS_WRAP_AT = 12  # wind down and offer band scores
+
+
+def ielts_director_note(user_turns):
+    """Transient steering note for the reply following user turn N.
+
+    The model knows the parts but not where it is; exact turn counts do.
+    Returns None most turns so the examiner keeps its natural flow.
+    """
+    if user_turns == IELTS_PART1_END:
+        return ("Director: Part 1 is complete. Now give Part 2: brief instructions, "
+                "one cue-card topic, and invite the candidate to speak for 1-2 minutes.")
+    if user_turns == IELTS_PART2_END:
+        return ("Director: Part 2 is complete. Move to Part 3: discussion questions "
+                "on the same theme, one per turn.")
+    if user_turns == IELTS_WRAP_AT:
+        return ("Director: wind down the test within 2 turns, then offer band scores "
+                "with one tip per criterion.")
+    return None
 PRESETS = {"ielts": IELTS_EXAMINER_PROMPT}
 PRESET_LANG = {"ielts": "en"}
 # IELTS candidates pause to think mid-answer and speak 1-2 min in Part 2,

@@ -16,7 +16,7 @@ warnings.filterwarnings(
 )
 
 from .audio import Microphone, Speaker
-from .config import VOICE_BANNER, VOICE_SUMMARY, Settings
+from .config import VOICE_BANNER, VOICE_SUMMARY, Settings, ielts_director_note
 from .history import ConversationHistory
 from .llm import StreamingLLM
 from .stt_endpoint import endpoint_threshold
@@ -246,7 +246,13 @@ def main(argv=None):
         first, synth_total, n_chunks = -1.0, 0.0, 0
         answer = ""
         print("Agent: ", end="", flush=True)
-        for chunk in sentence_chunks(llm.stream(history.build(summarize=summarize_older))):
+        messages = history.build(summarize=summarize_older)
+        if args.preset == "ielts":
+            note = ielts_director_note(n)
+            if note:
+                # Transient: steers this reply only, never stored or summarized.
+                messages = messages + [{"role": "system", "content": note}]
+        for chunk in sentence_chunks(llm.stream(messages)):
             if first < 0:
                 first = time.time() - t0
             print(chunk, end="", flush=True)
