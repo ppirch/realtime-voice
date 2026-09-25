@@ -7,6 +7,7 @@ from .audio import Microphone, Speaker
 from .history import ConversationHistory
 from .llm import StreamingLLM
 from .stt import Qwen3ASRStreaming
+from .stt_mlx import Qwen3ASRMLXBackend
 from .tts_mms import MMSThaiTTS
 from .text import sentence_chunks
 
@@ -47,7 +48,8 @@ def main(argv=None):
         s.system_prompt,
         protocol=s.llm_protocol,
     )
-    asr = Qwen3ASRStreaming()
+    print("Loading speech models (MMS Thai TTS + Qwen3-ASR MLX)...", file=sys.stderr, flush=True)
+    asr = Qwen3ASRStreaming(backend=Qwen3ASRMLXBackend())
     tts = MMSThaiTTS()
     speaker = None if args.mute else Speaker(s.tts_sample_rate)
     history = ConversationHistory(max_recent=8)

@@ -45,7 +45,7 @@ cp .env.example .env
 ## Run
 
 ```bash
-uv run thai-voice                    # microphone + speaker
+uv run thai-voice                    # microphone + speaker (local MLX STT, pause ~1s to end a turn)
 uv run thai-voice --text             # type turns on stdin, no mic needed
 uv run thai-voice --text --mute      # synthesize but skip playback
 uv run thai-voice --text --max-turns 5 < turns.txt
