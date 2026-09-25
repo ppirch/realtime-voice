@@ -58,3 +58,13 @@ What improved: replies are short and conversational
 What did not: first-audio barely moved (11.8s → 11.2s) — shortening replies
 does not reduce time-to-first-chunk, so that wait is server-side, not
 reply-length-bound. Prompt fix buys speakability + shorter turns, not latency.
+
+## Run 3 — space-bunny-free + keep-alive + max_tokens (2 live turns)
+
+- first-audio: **3.5s → 2.3s**, turn totals 4.1s / 2.8s (was ~11s on muse-spark).
+- Model streams brief reasoning first: `max_tokens=150` starves the answer
+  (reasoning eats the budget, zero content); `1000` gives content at ~2.5s.
+- Go also sends choiceless SSE events (usage/heartbeat) — parser skips them.
+- Verdict on SDK-vs-keep-alive: OpenAI SDK works (headers accepted) but buys
+  no speed over raw httpx with one shared keep-alive client, so the repo keeps
+  raw httpx and the SDK stays out of dependencies.

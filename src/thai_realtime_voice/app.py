@@ -47,6 +47,7 @@ def main(argv=None):
         s.llm_model,
         s.system_prompt,
         protocol=s.llm_protocol,
+        max_tokens=s.max_tokens,
     )
     print("Loading speech models (MMS Thai TTS + Qwen3-ASR MLX)...", file=sys.stderr, flush=True)
     asr = Qwen3ASRStreaming(backend=Qwen3ASRMLXBackend())

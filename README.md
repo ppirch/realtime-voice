@@ -4,16 +4,19 @@ Realtime Thai voice conversation on Apple Silicon.
 
 Pipeline: microphone -> local streaming STT -> streaming LLM API -> local Thai TTS -> speaker.
 
-## LLM: OpenCode Zen / Muse Spark 1.3 Contributor
+## LLM: OpenCode Zen / Space Bunny Free
 
 The default configuration is:
 
-- model: `muse-spark-1.3-contributor`
-- endpoint: `https://opencode.ai/zen/go/v1/responses`
-- protocol: OpenAI Responses API
-- SDK compatibility: `@ai-sdk/openai`
+- model: `space-bunny-free` (free, unlimited promo quota)
+- endpoint: `https://opencode.ai/zen/go/v1/chat/completions`
+- protocol: OpenAI Chat Completions API (`choices[].delta.content` stream)
+- `LLM_MAX_TOKENS=1000` — the model reasons briefly first, so a small budget
+  starves the answer; 1000 leaves room for thinking + reply.
 
-OpenCode lists Muse Spark 1.3 Contributor on the Go endpoint as a Responses API model with `@ai-sdk/openai`.
+`muse-spark-1.3-contributor` remains available via `LLM_PROTOCOL=responses`
+(slower first-audio, better Thai). The client keeps one keep-alive HTTP
+connection across turns (no per-turn TLS handshake).
 
 Create `.env` from `.env.example` and put your key in:
 

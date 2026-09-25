@@ -3,11 +3,23 @@ import uuid
 
 import httpx
 
+_client = None
+
+
+def _shared_client():
+    """One keep-alive client: no TLS/DNS handshake on every turn."""
+    global _client
+    if _client is None:
+        _client = httpx.Client(
+            timeout=httpx.Timeout(connect=10, read=None, write=10, pool=10)
+        )
+    return _client
+
 
 class StreamingLLM:
     """Streaming LLM client for OpenAI Chat Completions and Responses APIs."""
 
-    def __init__(self, base_url, api_key, model, system_prompt, protocol="responses", session_id=None):
+    def __init__(self, base_url, api_key, model, system_prompt, protocol="responses", session_id=None, max_tokens=None):
         self.protocol = protocol
         self.url = base_url.rstrip("/")
         if protocol == "chat_completions":
@@ -18,6 +30,7 @@ class StreamingLLM:
             raise ValueError("LLM_PROTOCOL must be 'responses' or 'chat_completions'")
         self.api_key, self.model, self.system_prompt = api_key, model, system_prompt
         self.session_id = session_id or str(uuid.uuid4())
+        self.max_tokens = max_tokens
 
     def stream(self, messages):
         headers = {
@@ -37,6 +50,8 @@ class StreamingLLM:
                     *messages,
                 ],
             }
+            if self.max_tokens:
+                payload["max_output_tokens"] = self.max_tokens
         else:
             payload = {
                 "model": self.model,
@@ -46,14 +61,14 @@ class StreamingLLM:
                     *messages,
                 ],
             }
+            if self.max_tokens:
+                payload["max_tokens"] = self.max_tokens
 
-        timeout = httpx.Timeout(connect=10, read=None, write=10, pool=10)
-        with httpx.stream(
+        with _shared_client().stream(
             "POST",
             self.url,
             headers=headers,
             json=payload,
-            timeout=timeout,
         ) as response:
             response.raise_for_status()
             for line in response.iter_lines():
@@ -71,10 +86,9 @@ class StreamingLLM:
                         if delta:
                             yield delta
                 else:
-                    delta = (
-                        data.get("choices", [{}])[0]
-                        .get("delta", {})
-                        .get("content")
-                    )
+                    choices = data.get("choices") or []
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta", {}).get("content")
                     if delta:
                         yield delta
