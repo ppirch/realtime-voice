@@ -10,7 +10,7 @@ Then start the loop in text mode (no microphone needed) with the requested langu
 
 uv run realtime-voice --text --lang <language>
 
-Start the loop as a background process. Because the harness's background shell cannot accept later stdin writes directly, use a temporary FIFO: create the input FIFO and keep a writer open with `tail -f /dev/null`, then run the loop with the FIFO as stdin and separate stdout/stderr files. After each user message, append it to the FIFO and wait for that turn's timing line on stderr before showing the agent's stdout reply. Do not use `sleep infinity`; it is unsupported by macOS `sleep`. Send `stop\n` and terminate the loop plus its FIFO writer when the user says stop.
+Start the loop in the harness's background mode by default; do not run the loop shell in the foreground. Because the harness's background shell cannot accept later stdin writes directly, use a temporary FIFO: create the input FIFO and keep a writer open with `tail -f /dev/null`, then run the loop with the FIFO as stdin and separate stdout/stderr files. After each user message, append it to the FIFO and wait for that turn's timing line on stderr before showing the agent's stdout reply. Do not use `sleep infinity`; it is unsupported by macOS `sleep`. Send `stop\n` and terminate the loop plus its FIFO writer when the user says stop.
 
 Interpret the command arguments as:
 - `<language> [opening topic]`, where language is a BCP 47 language code such as `en` or `es`.
