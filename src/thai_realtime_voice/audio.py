@@ -12,9 +12,19 @@ class Microphone:
         self.sample_rate, self.chunk_ms = sample_rate, chunk_ms
         self.q = queue.Queue(maxsize=32)
         self.stream = None
+        self.peak = 0.0
+    def device_name(self):
+        try: return sd.query_devices(kind='input')['name']
+        except Exception: return 'unknown'
+    def level(self):
+        """Peak RMS since last call (0.0 = silence). Resets on read."""
+        peak, self.peak = self.peak, 0.0
+        return peak
     def _cb(self, indata, frames, time_info, status):
         del frames, time_info, status
         chunk = np.asarray(indata[:,0], dtype=np.float32).copy()
+        rms = float(np.sqrt((chunk ** 2).mean()))
+        if rms > self.peak: self.peak = rms
         try: self.q.put_nowait(chunk)
         except queue.Full:
             try: self.q.get_nowait()

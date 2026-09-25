@@ -61,6 +61,20 @@ def mic_texts(asr, mic, sample_rate):
             yield event.text.strip()
 
 
+def mic_check(mic):
+    """Print input device + live level so a dead mic is obvious.
+
+    Waits ~2s for the queue to fill; the buffered audio stays queued
+    (maxsize 32 ≈ 2.5s), so nothing the user says is lost.
+    """
+    print(f"mic: {mic.device_name()}", file=sys.stderr, flush=True)
+    time.sleep(2.0)
+    peak = mic.level()
+    print(f"mic level: {peak:.3f} " + ("(ok — speak, then pause ~1s)" if peak > 0.005
+          else "(SILENT — check macOS Microphone permission for your terminal)"),
+          file=sys.stderr, flush=True)
+
+
 def stdin_texts():
     for line in sys.stdin:
         if line.strip():
@@ -79,6 +93,7 @@ def main(argv=None):
         print("STT-only mode — speak, pause ~1s to finalize, Ctrl-C to quit",
               file=sys.stderr)
         with Microphone(s.sample_rate, s.input_chunk_ms) as mic:
+            mic_check(mic)
             for text in mic_texts(asr, mic, s.sample_rate):
                 print(text, flush=True)
         return
@@ -157,6 +172,7 @@ def main(argv=None):
                 break
     else:
         with Microphone(s.sample_rate, s.input_chunk_ms) as mic:
+            mic_check(mic)
             for text in mic_texts(asr, mic, s.sample_rate):
                 n += 1
                 handle_turn(text, n)
