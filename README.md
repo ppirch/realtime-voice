@@ -53,6 +53,7 @@ uv run realtime-voice --text             # type turns on stdin, no mic needed
 uv run realtime-voice --text --mute      # synthesize but skip playback
 uv run realtime-voice --text --max-turns 5 < turns.txt
 uv run realtime-voice --stt-only          # microphone to text only, no LLM/TTS
+uv run realtime-voice-say --lang en "hello there"  # local TTS only, no API key needed
 ```
 
 From OpenCode: `/voice-chat <opening topic>` relays between you and the loop.

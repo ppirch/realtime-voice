@@ -20,6 +20,7 @@ stt-live = ["mlx-whisper>=0.2"]
 
 [project.scripts]
 realtime-voice = "realtime_voice.app:main"
+realtime-voice-say = "realtime_voice.say:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
