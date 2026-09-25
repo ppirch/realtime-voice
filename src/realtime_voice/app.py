@@ -26,6 +26,7 @@ from .config import (
 )
 from .history import ConversationHistory
 from .llm import StreamingLLM
+from .record import SessionRecorder
 from .stt_endpoint import endpoint_threshold
 from .stt_mlx import Qwen3ASRMLXBackend
 from .stt_parakeet import ParakeetMLXBackend
@@ -56,6 +57,8 @@ def parse_args(argv=None):
                    help='longest single turn in seconds (default 15, ielts 120)')
     p.add_argument('--live', action='store_true',
                    help='live word previews while speaking (mlx-whisper streaming, needs stt-live extra)')
+    p.add_argument('--record', default=None, metavar='DIR',
+                   help='save session transcript + mic/agent audio under DIR/<timestamp>/')
     return p.parse_args(argv)
 
 
@@ -84,14 +87,23 @@ def resolve_endpoint(args, s):
     return silence_ms, max_utterance_s
 
 
-def mic_texts(backend, mic, sample_rate, on_preview=None):
-    for event in backend.stream(mic.chunks(), sample_rate=sample_rate):
+def mic_texts(backend, mic, sample_rate, on_preview=None, tap=None):
+    chunks = mic.chunks()
+    if tap is not None:
+        chunks = _tap(chunks, tap)
+    for event in backend.stream(chunks, sample_rate=sample_rate):
         if not event.text.strip():
             continue
         if getattr(event, 'is_final', True):
             yield event.text.strip()
         elif on_preview is not None:
             on_preview(event.text.strip())
+
+
+def _tap(chunks, fn):
+    for chunk in chunks:
+        fn(chunk)
+        yield chunk
 
 
 def show_preview(text):
@@ -122,7 +134,7 @@ def mic_session(args, s, backend_cls):
 
 
 def run_mic_loop(args, backend, mic, sample_rate, silence_ms,
-                 on_turn, settle, on_preview=None):
+                 on_turn, settle, on_preview=None, recorder=None):
     """Shared turn loop: previews, dispatch, optional half-duplex settle.
 
     settle (sleep + flush) exists because the mic hears our own speaker;
@@ -130,11 +142,18 @@ def run_mic_loop(args, backend, mic, sample_rate, silence_ms,
     """
     if on_preview is None:
         on_preview = show_preview if args.live else None
+    tap = recorder.mic_chunk if recorder is not None else None
     print(listening_msg(silence_ms), file=sys.stderr, flush=True)
-    n = 0
-    for text in mic_texts(backend, mic, sample_rate, on_preview=on_preview):
+    n, t_prev = 0, time.time()
+    for text in mic_texts(backend, mic, sample_rate,
+                          on_preview=on_preview, tap=tap):
         clear_preview()
         n += 1
+        t_now = time.time()
+        if recorder is not None:
+            recorder.turn('user', text, n=n)
+            recorder.turn_window(n, t_prev, t_now)
+        t_prev = t_now
         on_turn(text, n)
         if args.max_turns and n >= args.max_turns:
             break
@@ -210,16 +229,21 @@ def main(argv=None):
     s = Settings.from_env()
     voice_lang, system_prompt = resolve_lang_prompt(args, s)
     s = replace(s, voice_lang=voice_lang, system_prompt=system_prompt)
+    silence_ms, max_utterance_s = resolve_endpoint(args, s)
+    recorder = (SessionRecorder(args.record, s.sample_rate, s.voice_lang,
+                                args.preset, silence_ms, max_utterance_s)
+                if args.record else None)
 
     if args.stt_only:
         backend_cls, _ = build_voice(s)
-        silence_ms, _ = resolve_endpoint(args, s)
         print(f"STT-only mode — speak, pause ~{silence_ms / 1000:g}s to finalize, Ctrl-C to quit",
               file=sys.stderr)
         with mic_session(args, s, backend_cls) as (backend, mic, silence_ms):
             run_mic_loop(args, backend, mic, s.sample_rate, silence_ms,
                          on_turn=lambda text, n: print(text, flush=True),
-                         settle=False)
+                         settle=False, recorder=recorder)
+        if recorder is not None:
+            recorder.close()
         return
 
     if not s.llm_model:
@@ -263,7 +287,7 @@ def main(argv=None):
         history.add("user", text)
         t0 = time.time()
         first, synth_total, n_chunks = -1.0, 0.0, 0
-        answer = ""
+        answer, agent_arrays = "", []
         print("Agent: ", end="", flush=True)
         messages = history.build(summarize=summarize_older)
         if args.preset == "ielts":
@@ -281,6 +305,7 @@ def main(argv=None):
             answer += chunk
             t1 = time.time()
             audio = tts.synthesize(chunk)
+            agent_arrays.append(audio)
             synth_total += time.time() - t1
             n_chunks += 1
             if speaker is not None:
@@ -288,6 +313,13 @@ def main(argv=None):
         print(flush=True)
         history.add("assistant", answer)
         total = time.time() - t0
+        if recorder is not None:
+            recorder.turn('assistant', answer, n=n, timings={
+                'first_audio_s': round(max(first, 0.0), 1),
+                'synth_s': round(synth_total, 1),
+                'total_s': round(total, 1),
+            })
+            recorder.agent_audio(agent_arrays, s.tts_sample_rate)
         print(f"[turn {n}] first-audio {first:.1f}s | {n_chunks} chunks | "
               f"synth {synth_total:.1f}s | total {total:.1f}s",
               file=sys.stderr, flush=True)
@@ -299,6 +331,8 @@ def main(argv=None):
         source = stdin_texts()
         for text in source:
             n += 1
+            if recorder is not None:
+                recorder.turn('user', text, n=n)
             handle_turn(text, n)
             if args.max_turns and n >= args.max_turns:
                 break
@@ -306,4 +340,7 @@ def main(argv=None):
         with mic_session(args, s, backend_cls) as (backend, mic, silence_ms):
             run_mic_loop(args, backend, mic, s.sample_rate, silence_ms,
                          on_turn=lambda text, n: handle_turn(text, n),
-                         settle=True)
+                         settle=True, recorder=recorder)
+    if recorder is not None:
+        recorder.close()
+        print(f"session saved to {recorder.dir}", file=sys.stderr, flush=True)

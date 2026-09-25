@@ -82,6 +82,14 @@ uv run realtime-voice --live --preset ielts
 Live mode re-decodes every ~2s, so it uses noticeably more CPU than the
 default utterance backends. Omit `--live` for the lighter, preview-free loop.
 
+## Session recording
+
+`--record DIR` keeps everything past the in-memory transcript: per-turn
+transcript (`transcript.md`), user mic audio (`mic.wav`), agent voice
+(`agent.wav`), and settings + timings (`meta.json`) under `DIR/<timestamp>/`.
+Band scores requested mid-session are computed from the full transcript,
+not the compressed rolling summary.
+
 English uses Parakeet-TDT 0.6B (MLX) for STT and Kokoro-82M for TTS with
 English prompts. Precedence: `--system-prompt` > `--lang` builtin >
 `LLM_SYSTEM_PROMPT` env > language default. (`VOICE_LANG` env also works
