@@ -52,6 +52,7 @@ uv run thai-voice                    # microphone + speaker (local MLX STT, paus
 uv run thai-voice --text             # type turns on stdin, no mic needed
 uv run thai-voice --text --mute      # synthesize but skip playback
 uv run thai-voice --text --max-turns 5 < turns.txt
+uv run thai-voice --stt-only          # microphone to text only, no LLM/TTS
 ```
 
 From OpenCode: `/voice-chat <opening topic>` relays between you and the loop.

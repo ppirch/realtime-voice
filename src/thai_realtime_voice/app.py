@@ -20,6 +20,8 @@ def parse_args(argv=None):
                    help='synthesize speech but skip speaker playback')
     p.add_argument('--max-turns', type=int, default=0,
                    help='stop after N turns (0 = unlimited)')
+    p.add_argument('--stt-only', action='store_true',
+                   help='microphone to text only, no LLM/TTS')
     return p.parse_args(argv)
 
 
@@ -38,6 +40,16 @@ def stdin_texts():
 def main(argv=None):
     args = parse_args(argv)
     s = Settings.from_env()
+
+    if args.stt_only:
+        asr = Qwen3ASRStreaming(backend=Qwen3ASRMLXBackend())
+        print("STT-only mode — speak, pause ~1s to finalize, Ctrl-C to quit",
+              file=sys.stderr)
+        with Microphone(s.sample_rate, s.input_chunk_ms) as mic:
+            for text in mic_texts(asr, mic, s.sample_rate):
+                print(text, flush=True)
+        return
+
     if not s.llm_model:
         raise SystemExit("Set LLM_MODEL in .env")
 
