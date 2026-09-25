@@ -40,14 +40,18 @@ def parse_args(argv=None):
                    help='voice language backend (overrides VOICE_LANG)')
     p.add_argument('--system-prompt', default=None,
                    help='system prompt (overrides language default and env)')
+    p.add_argument('--preset', choices=('ielts',), default=None,
+                   help='built-in role preset (overrides language default)')
     return p.parse_args(argv)
 
 
 def resolve_lang_prompt(args, s):
     """CLI > explicit lang default > env (.env) > built-in default."""
-    from .config import EN_SYSTEM_PROMPT, TH_SYSTEM_PROMPT
+    from .config import EN_SYSTEM_PROMPT, PRESET_LANG, PRESETS, TH_SYSTEM_PROMPT
     if args.system_prompt:
         return (args.lang or s.voice_lang), args.system_prompt
+    if args.preset:
+        return (args.lang or PRESET_LANG.get(args.preset) or s.voice_lang), PRESETS[args.preset]
     if args.lang:
         lang = args.lang
         prompt = EN_SYSTEM_PROMPT if lang == "en" else TH_SYSTEM_PROMPT

@@ -21,3 +21,14 @@ def test_system_prompt_flag_wins_over_everything():
     s = _settings(prompt="ENV PROMPT", lang="th")
     assert resolve_lang_prompt(parse_args(["--lang", "en", "--system-prompt", "CUSTOM"]), s) == ("en", "CUSTOM")
     assert resolve_lang_prompt(parse_args(["--system-prompt", "CUSTOM"]), s) == ("th", "CUSTOM")
+
+
+def test_ielts_preset_implies_english():
+    from thai_realtime_voice.config import IELTS_EXAMINER_PROMPT
+    s = _settings(prompt="ENV PROMPT", lang="th")
+    lang, prompt = resolve_lang_prompt(parse_args(["--preset", "ielts"]), s)
+    assert lang == "en" and prompt == IELTS_EXAMINER_PROMPT
+    assert "Part 1" in prompt
+    # explicit lang still wins for backends
+    lang, _ = resolve_lang_prompt(parse_args(["--preset", "ielts", "--lang", "th"]), s)
+    assert lang == "th"
