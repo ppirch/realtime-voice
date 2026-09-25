@@ -44,6 +44,8 @@ def parse_args(argv=None):
                    help='also save the audio to a WAV file')
     p.add_argument('--mute', action='store_true',
                    help='skip speaker playback (needs --out)')
+    p.add_argument('--listen', action='store_true',
+                   help='daemon mode: load the model once, speak every stdin line until EOF')
     return p.parse_args(argv)
 
 
@@ -84,8 +86,21 @@ def write_wav(path, audio):
         f.writeframes((pcm * 32767).astype(np.int16).tobytes())
 
 
+def run_daemon(tts, speaker):
+    """Speak every stdin line until EOF. The model stays loaded between
+    lines, so per-message cost is synth only (~0.3-0.6s), not reload."""
+    for line in sys.stdin:
+        if line.strip():
+            speak(line.strip(), tts=tts, speaker=speaker)
+
+
 def main(argv=None):
     args = parse_args(argv)
+    if args.listen:
+        if args.text is not None or args.out is not None or args.mute:
+            raise SystemExit("--listen takes no TEXT/--out/--mute")
+        run_daemon(build_tts(args.lang), Speaker(SAMPLE_RATE))
+        return
     text = args.text
     if text is None:
         text = sys.stdin.read().strip()

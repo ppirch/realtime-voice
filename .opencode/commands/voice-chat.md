@@ -20,6 +20,12 @@ Rules:
   - English: `You are a realtime English voice assistant. Reply in spoken English only: 1-2 short sentences per turn, under 60 characters when possible. Never use lists, markdown, emoji, URLs, or symbols. One idea per turn, then ask a brief follow-up to keep talking.`
   - Thai: `You are a realtime Thai voice assistant. Reply in spoken Thai only: 1-2 short sentences per turn, under 60 characters when possible. Never use lists, markdown, emoji, URLs, or symbols. Write numbers as Thai words. One idea per turn, then ask a brief follow-up to keep talking.`
 
+Assistant speech: everything you say to the user must be heard, not just read. Keep a warm TTS daemon running so the model loads once per session instead of once per message:
+
+uv run realtime-voice-say --listen --lang <language>
+
+Give it its own FIFO + `tail -f /dev/null` writer, like the voice loop (separate files). Append every assistant message (questions, prompts, status) to the say FIFO as well as showing the text. Do NOT pipe the loop's own Agent replies through it — the loop already speaks those through its speaker; double-piping echoes. Terminate the say daemon together with the loop when the user says stop.
+
 Start the loop in the harness's background mode by default; do not run the loop shell in the foreground. Because the harness's background shell cannot accept later stdin writes directly, use a temporary FIFO: create the input FIFO and keep a writer open with `tail -f /dev/null`, then run the loop with the FIFO as stdin and separate stdout/stderr files. After each user message, append it to the FIFO and wait for that turn's timing line on stderr before showing the agent's stdout reply. Do not use `sleep infinity`; it is unsupported by macOS `sleep`. Send `stop\n` and terminate the loop plus its FIFO writer when the user says stop.
 
 Interpret the command arguments as:

@@ -3,7 +3,7 @@ import wave
 import numpy as np
 import pytest
 
-from realtime_voice.say import parse_args, speak
+from realtime_voice.say import main, parse_args, run_daemon, speak
 
 
 class FakeTTS:
@@ -54,3 +54,18 @@ def test_speak_mute_without_out_exits():
 
 def test_say_defaults_to_thai():
     assert parse_args(["hi"]).lang == "th"
+
+
+def test_daemon_speaks_each_line_and_skips_blanks(monkeypatch):
+    import io
+    import sys
+    monkeypatch.setattr(sys, "stdin", io.StringIO("Hi.\n\nBye.\n"))
+    tts, spk = FakeTTS(), FakeSpeaker()
+    run_daemon(tts, spk)
+    assert tts.chunks == ["Hi.", "Bye."]
+    assert len(spk.played) == 2
+
+
+def test_listen_rejects_single_shot_flags():
+    with pytest.raises(SystemExit):
+        main(["--listen", "--out", "x.wav"])
