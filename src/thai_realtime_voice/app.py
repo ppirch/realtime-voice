@@ -1,8 +1,11 @@
 import argparse
+import os
 import sys
 import time
 import warnings
 from dataclasses import replace
+
+os.environ.setdefault("HF_HUB_VERBOSITY", "error")
 
 # Known-noisy third-party warnings (torch deprecations, HF anonymous
 # rate-limit notice) — hidden for a clean voice-loop console.
