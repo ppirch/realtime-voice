@@ -26,26 +26,34 @@ def sentence_chunks(tokens, min_chars=12, target_chars=30, max_chars=60):
 
     Hard-split on sentence-final punctuation (any language), soft-split
     Thai phrase spaces every ~``target_chars`` chars so TTS can start
-    before the full LLM response arrives. The remainder is never dropped.
+    before the full LLM response arrives. Joins are lossless: concatenating
+    the chunks reproduces the input stream exactly (only leading/trailing
+    whitespace of the whole stream is trimmed), so callers can print and
+    accumulate with no separator. The remainder is never dropped.
     """
     buf = ''
+    first = True
     for token in tokens:
         buf += token
         parts = _HARD.split(buf)
         if len(parts) > 1:
             buf = parts[-1]
             for i in range(0, len(parts) - 1, 2):
-                chunk = (parts[i] + parts[i + 1]).strip()
-                if chunk:
+                chunk = parts[i] + parts[i + 1]
+                if chunk.strip():
+                    if first:
+                        chunk, first = chunk.lstrip(), False
                     yield chunk
         while True:
             cut = _soft_cut(buf, min_chars, target_chars, max_chars)
             if cut is None:
                 break
-            chunk, buf = buf[:cut].strip(), buf[cut:]
-            if chunk:
+            chunk, buf = buf[:cut], buf[cut:]
+            if chunk.strip():
+                if first:
+                    chunk, first = chunk.lstrip(), False
                 yield chunk
             elif not buf:
                 break
     if buf.strip():
-        yield buf.strip()
+        yield buf.lstrip() if first else buf

@@ -2,12 +2,16 @@ from realtime_voice.text import sentence_chunks
 
 
 def _no_loss(original, chunks):
-    norm = lambda s: s.replace(' ', '')
-    assert norm(''.join(chunks)) == norm(original), chunks
+    assert ''.join(chunks) == original.strip(), chunks
 
 
 def test_sentence_chunks():
-    assert list(sentence_chunks(iter(['สวัสดีครับ วันนี้ดีมากครับ! ขอบคุณ']))) == ['สวัสดีครับ วันนี้ดีมากครับ!', 'ขอบคุณ']
+    assert list(sentence_chunks(iter(['สวัสดีครับ วันนี้ดีมากครับ! ขอบคุณ']))) == ['สวัสดีครับ วันนี้ดีมากครับ!', ' ขอบคุณ']
+
+
+def test_english_sentences_keep_single_space():
+    tokens = iter(['Hi again.', ' Nice to hear from', ' you!'])
+    assert ''.join(sentence_chunks(tokens)) == 'Hi again. Nice to hear from you!'
 
 
 def test_thai_soft_split_without_punctuation():
