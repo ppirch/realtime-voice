@@ -19,7 +19,7 @@ def _shared_client():
 class StreamingLLM:
     """Streaming LLM client for OpenAI Chat Completions and Responses APIs."""
 
-    def __init__(self, base_url, api_key, model, system_prompt, protocol="responses", session_id=None, max_tokens=None):
+    def __init__(self, base_url, api_key, model, system_prompt, protocol="responses", session_id=None, max_tokens=None, reasoning_effort=None):
         self.protocol = protocol
         self.url = base_url.rstrip("/")
         if protocol == "chat_completions":
@@ -31,6 +31,7 @@ class StreamingLLM:
         self.api_key, self.model, self.system_prompt = api_key, model, system_prompt
         self.session_id = session_id or str(uuid.uuid4())
         self.max_tokens = max_tokens
+        self.reasoning_effort = reasoning_effort
 
     def stream(self, messages):
         headers = {
@@ -52,6 +53,8 @@ class StreamingLLM:
             }
             if self.max_tokens:
                 payload["max_output_tokens"] = self.max_tokens
+            if self.reasoning_effort:
+                payload["reasoning"] = {"effort": self.reasoning_effort}
         else:
             payload = {
                 "model": self.model,
@@ -63,6 +66,8 @@ class StreamingLLM:
             }
             if self.max_tokens:
                 payload["max_tokens"] = self.max_tokens
+            if self.reasoning_effort:
+                payload["reasoning_effort"] = self.reasoning_effort
 
         with _shared_client().stream(
             "POST",

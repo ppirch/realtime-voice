@@ -68,3 +68,11 @@ reply-length-bound. Prompt fix buys speakability + shorter turns, not latency.
 - Verdict on SDK-vs-keep-alive: OpenAI SDK works (headers accepted) but buys
   no speed over raw httpx with one shared keep-alive client, so the repo keeps
   raw httpx and the SDK stays out of dependencies.
+
+## Run 4 — reasoning_effort=low (2 live turns)
+
+- Probe: `reasoning_effort: 'low'` accepted, reasoning 5→2 chunks, content at
+  ~2.3s. Nested `reasoning: {effort}` form performed worse (6.8s) — not used.
+  Wired as `LLM_REASONING_EFFORT` (`reasoning_effort` on chat/completions,
+  `reasoning.effort` on responses).
+- Live: first-audio **2.4s → 1.4s**, totals 3.2s / 1.8s. Sub-2s turn achieved.

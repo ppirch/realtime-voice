@@ -12,6 +12,7 @@ class Settings:
     llm_protocol: str
     system_prompt: str
     max_tokens: int = 1000
+    reasoning_effort: str = ""
     sample_rate: int = 16000
     input_chunk_ms: int = 80
     tts_sample_rate: int = 24000
@@ -29,6 +30,7 @@ class Settings:
                 "You are a realtime Thai voice assistant. Reply in spoken Thai only: 1-2 short sentences per turn, under 60 characters when possible. Never use lists, markdown, emoji, URLs, or symbols. Write numbers as Thai words. One idea per turn, then ask a brief follow-up to keep talking.",
             ),
             int(os.getenv("LLM_MAX_TOKENS", "1000")),
+            os.getenv("LLM_REASONING_EFFORT", ""),
             int(os.getenv("SAMPLE_RATE", "16000")),
             int(os.getenv("INPUT_CHUNK_MS", "80")),
             int(os.getenv("TTS_SAMPLE_RATE", "24000")),
