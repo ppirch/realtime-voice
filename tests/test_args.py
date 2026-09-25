@@ -1,5 +1,5 @@
-from thai_realtime_voice.app import parse_args, resolve_lang_prompt
-from thai_realtime_voice.config import EN_SYSTEM_PROMPT, Settings, TH_SYSTEM_PROMPT
+from realtime_voice.app import parse_args, resolve_lang_prompt
+from realtime_voice.config import EN_SYSTEM_PROMPT, Settings, TH_SYSTEM_PROMPT
 
 
 def _settings(prompt="ENV PROMPT", lang="th"):
@@ -24,7 +24,7 @@ def test_system_prompt_flag_wins_over_everything():
 
 
 def test_ielts_preset_implies_english():
-    from thai_realtime_voice.config import IELTS_EXAMINER_PROMPT
+    from realtime_voice.config import IELTS_EXAMINER_PROMPT
     s = _settings(prompt="ENV PROMPT", lang="th")
     lang, prompt = resolve_lang_prompt(parse_args(["--preset", "ielts"]), s)
     assert lang == "en" and prompt == IELTS_EXAMINER_PROMPT

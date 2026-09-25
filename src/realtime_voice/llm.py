@@ -36,7 +36,7 @@ class StreamingLLM:
     def stream(self, messages):
         headers = {
             "Content-Type": "application/json",
-            "User-Agent": "thai-realtime-voice/0.1.0",
+            "User-Agent": "realtime-voice/0.1.0",
             "x-opencode-session": self.session_id,
         }
         if self.api_key:

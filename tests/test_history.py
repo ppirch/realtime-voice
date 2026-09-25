@@ -1,4 +1,4 @@
-from thai_realtime_voice.history import ConversationHistory
+from realtime_voice.history import ConversationHistory
 
 
 def test_short_history_passes_through_untouched():

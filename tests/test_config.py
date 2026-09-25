@@ -1,7 +1,7 @@
 import os
 
-import thai_realtime_voice.config as config_mod
-from thai_realtime_voice.config import Settings
+import realtime_voice.config as config_mod
+from realtime_voice.config import Settings
 
 
 def _no_dotenv(monkeypatch, tmp_path):

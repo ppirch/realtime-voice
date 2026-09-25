@@ -1,4 +1,4 @@
-from thai_realtime_voice.text import sentence_chunks
+from realtime_voice.text import sentence_chunks
 
 
 def _no_loss(original, chunks):

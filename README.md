@@ -1,8 +1,8 @@
-# Thai Realtime Voice
+# Realtime Voice
 
-Realtime Thai voice conversation on Apple Silicon.
+Realtime voice conversation on Apple Silicon, in Thai (default) and English (`--lang en`).
 
-Pipeline: microphone -> local streaming STT -> streaming LLM API -> local Thai TTS -> speaker.
+Pipeline: microphone -> local streaming STT -> streaming LLM API -> local TTS -> speaker.
 
 ## LLM: OpenCode Zen / Space Bunny Free
 
@@ -30,7 +30,7 @@ The client consumes `response.output_text.delta` events from the Responses strea
 
 ## Layout
 
-- `src/thai_realtime_voice/` runtime
+- `src/realtime_voice/` runtime
 - `benchmark/` isolated benchmarks
 - `tests/` unit tests
 
@@ -48,23 +48,25 @@ cp .env.example .env
 ## Run
 
 ```bash
-uv run thai-voice                    # microphone + speaker (local MLX STT, pause ~1s to end a turn; mic pauses while bot speaks)
-uv run thai-voice --text             # type turns on stdin, no mic needed
-uv run thai-voice --text --mute      # synthesize but skip playback
-uv run thai-voice --text --max-turns 5 < turns.txt
-uv run thai-voice --stt-only          # microphone to text only, no LLM/TTS
+uv run realtime-voice                    # microphone + speaker (local MLX STT, pause ~1s to end a turn; mic pauses while bot speaks)
+uv run realtime-voice --text             # type turns on stdin, no mic needed
+uv run realtime-voice --text --mute      # synthesize but skip playback
+uv run realtime-voice --text --max-turns 5 < turns.txt
+uv run realtime-voice --stt-only          # microphone to text only, no LLM/TTS
 ```
 
 From OpenCode: `/voice-chat <opening topic>` relays between you and the loop.
 
 Per-turn timings (first-audio, chunks, synth) go to stderr; the transcript goes to stdout.
 
-## English mode
+## Languages
+
+Thai is the default (Qwen3-ASR MLX + MMS Thai TTS). English mode:
 
 ```bash
 uv pip install -e '.[stt-en,tts-en]'
 brew install espeak-ng          # Kokoro phonemizer backend
-uv run thai-voice --text --lang en
+uv run realtime-voice --text --lang en
 ```
 
 English uses Parakeet-TDT 0.6B (MLX) for STT and Kokoro-82M for TTS with
@@ -72,4 +74,4 @@ English prompts. Precedence: `--system-prompt` > `--lang` builtin >
 `LLM_SYSTEM_PROMPT` env > language default. (`VOICE_LANG` env also works
 when `--lang` is omitted.)
 
-The realtime loop is designed for streaming operation. Default TTS is local MMS Thai (`facebook/mms-tts-tha`); live STT still needs a streaming backend (`Qwen3ASRStreaming.backend`), measurable offline via `benchmark/asr_benchmark.py` (mlx-qwen3-asr).
+The realtime loop is designed for streaming operation. Default TTS is local MMS Thai (`facebook/mms-tts-tha`); `--lang en` switches to Kokoro-82M + Parakeet-TDT. Live STT uses energy endpointing over the local model, measurable offline via `benchmark/asr_benchmark.py` (mlx-qwen3-asr).

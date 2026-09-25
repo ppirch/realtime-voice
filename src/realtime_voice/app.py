@@ -180,7 +180,7 @@ def main(argv=None):
               file=sys.stderr, flush=True)
         return answer.strip() != ""
 
-    print("Thai Realtime Voice — Ctrl-C to quit", file=sys.stderr)
+    print("Realtime Voice — Ctrl-C to quit", file=sys.stderr)
     n = 0
     if args.text:
         source = stdin_texts()
