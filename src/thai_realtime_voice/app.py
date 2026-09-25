@@ -1,6 +1,7 @@
 import argparse
 import sys
 import time
+from dataclasses import replace
 
 from .config import Settings
 from .audio import Microphone, Speaker
@@ -24,7 +25,23 @@ def parse_args(argv=None):
                    help='stop after N turns (0 = unlimited)')
     p.add_argument('--stt-only', action='store_true',
                    help='microphone to text only, no LLM/TTS')
+    p.add_argument('--lang', choices=('th', 'en'), default=None,
+                   help='voice language backend (overrides VOICE_LANG)')
+    p.add_argument('--system-prompt', default=None,
+                   help='system prompt (overrides language default and env)')
     return p.parse_args(argv)
+
+
+def resolve_lang_prompt(args, s):
+    """CLI > explicit lang default > env (.env) > built-in default."""
+    from .config import EN_SYSTEM_PROMPT, TH_SYSTEM_PROMPT
+    if args.system_prompt:
+        return (args.lang or s.voice_lang), args.system_prompt
+    if args.lang:
+        lang = args.lang
+        prompt = EN_SYSTEM_PROMPT if lang == "en" else TH_SYSTEM_PROMPT
+        return lang, prompt
+    return s.voice_lang, s.system_prompt
 
 
 def mic_texts(asr, mic, sample_rate):
@@ -42,6 +59,8 @@ def stdin_texts():
 def main(argv=None):
     args = parse_args(argv)
     s = Settings.from_env()
+    voice_lang, system_prompt = resolve_lang_prompt(args, s)
+    s = replace(s, voice_lang=voice_lang, system_prompt=system_prompt)
 
     if args.stt_only:
         backend = ParakeetMLXBackend() if s.voice_lang == "en" else Qwen3ASRMLXBackend()
