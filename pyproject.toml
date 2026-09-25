@@ -16,6 +16,7 @@ stt-mlx = ["mlx-qwen3-asr>=0.4"]
 tts-local = ["transformers>=4", "torch"]
 stt-en = ["parakeet-mlx>=0.5"]
 tts-en = ["kokoro>=0.9"]
+stt-live = ["mlx-whisper>=0.2"]
 
 [project.scripts]
 realtime-voice = "realtime_voice.app:main"

@@ -46,6 +46,8 @@ def parse_args(argv=None):
                    help='trailing silence to end a turn (default 800, ielts 2500)')
     p.add_argument('--max-utterance-s', type=int, default=None,
                    help='longest single turn in seconds (default 15, ielts 120)')
+    p.add_argument('--live', action='store_true',
+                   help='live word previews while speaking (mlx-whisper streaming, needs stt-live extra)')
     return p.parse_args(argv)
 
 
@@ -74,10 +76,36 @@ def resolve_endpoint(args, s):
     return silence_ms, max_utterance_s
 
 
-def mic_texts(asr, mic, sample_rate):
+def mic_texts(asr, mic, sample_rate, on_preview=None):
     for event in asr.stream(mic.chunks(), sample_rate=sample_rate):
-        if getattr(event, 'is_final', False) and event.text.strip():
+        if not event.text.strip():
+            continue
+        if getattr(event, 'is_final', True):
             yield event.text.strip()
+        elif on_preview is not None:
+            on_preview(event.text.strip())
+
+
+def show_preview(text):
+    """One-line rolling caption on stderr; cleared when the turn lands."""
+    print(f"\r\x1b[K… {text}", end="", file=sys.stderr, flush=True)
+
+
+def clear_preview():
+    print("\r\x1b[K", end="", file=sys.stderr, flush=True)
+
+
+def build_backend(args, s, backend_cls, threshold, silence_ms, max_utterance_s):
+    """Live streaming backend (--live) or the default utterance backend."""
+    if args.live:
+        from .stt_live import LiveWhisperMLXBackend
+        return LiveWhisperMLXBackend(
+            language=s.voice_lang,
+            silence_rms=threshold, silence_ms=silence_ms,
+            max_utterance_s=max_utterance_s)
+    return backend_cls(
+        silence_rms=threshold, silence_ms=silence_ms,
+        max_utterance_s=max_utterance_s)
 
 
 def mic_check(mic):
@@ -127,13 +155,19 @@ def main(argv=None):
         backend_cls = ParakeetMLXBackend if s.voice_lang == "en" else Qwen3ASRMLXBackend
         print(f"STT-only mode — speak, pause ~{silence_ms / 1000:g}s to finalize, Ctrl-C to quit",
               file=sys.stderr)
-        with Microphone(s.sample_rate, s.input_chunk_ms) as mic:
+        with Microphone(s.sample_rate, s.input_chunk_ms,
+                         qsize=200 if args.live else 32) as mic:
             floor = mic_check(mic)
-            asr = Qwen3ASRStreaming(backend=backend_cls(
-                silence_rms=endpoint_threshold(floor),
-                silence_ms=silence_ms, max_utterance_s=max_utterance_s))
+            asr = Qwen3ASRStreaming(backend=build_backend(
+                args, s, backend_cls, endpoint_threshold(floor),
+                silence_ms, max_utterance_s))
+            if args.live:
+                print("live captions on — words appear as you speak",
+                      file=sys.stderr, flush=True)
             print(listening_msg(silence_ms), file=sys.stderr, flush=True)
-            for text in mic_texts(asr, mic, s.sample_rate):
+            for text in mic_texts(asr, mic, s.sample_rate,
+                                  on_preview=show_preview if args.live else None):
+                clear_preview()
                 print(text, flush=True)
                 print(listening_msg(silence_ms), file=sys.stderr, flush=True)
         return
@@ -212,15 +246,21 @@ def main(argv=None):
             if args.max_turns and n >= args.max_turns:
                 break
     else:
-        with Microphone(s.sample_rate, s.input_chunk_ms) as mic:
+        with Microphone(s.sample_rate, s.input_chunk_ms,
+                         qsize=200 if args.live else 32) as mic:
             floor = mic_check(mic)
             print(f"endpoint threshold: {endpoint_threshold(floor):.3f}",
                   file=sys.stderr, flush=True)
-            asr = Qwen3ASRStreaming(backend=backend_cls(
-                silence_rms=endpoint_threshold(floor),
-                silence_ms=silence_ms, max_utterance_s=max_utterance_s))
+            asr = Qwen3ASRStreaming(backend=build_backend(
+                args, s, backend_cls, endpoint_threshold(floor),
+                silence_ms, max_utterance_s))
+            if args.live:
+                print("live captions on — words appear as you speak",
+                      file=sys.stderr, flush=True)
             print(listening_msg(silence_ms), file=sys.stderr, flush=True)
-            for text in mic_texts(asr, mic, s.sample_rate):
+            for text in mic_texts(asr, mic, s.sample_rate,
+                                  on_preview=show_preview if args.live else None):
+                clear_preview()
                 n += 1
                 handle_turn(text, n)
                 if args.max_turns and n >= args.max_turns:

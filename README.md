@@ -69,6 +69,19 @@ brew install espeak-ng          # Kokoro phonemizer backend
 uv run realtime-voice --text --lang en
 ```
 
+## Live captions
+
+`--live` shows the words as you speak (mlx-whisper streaming, Thai + English),
+then sends the turn on your usual silence pause:
+
+```bash
+uv pip install -e '.[stt-live]'
+uv run realtime-voice --live --preset ielts
+```
+
+Live mode re-decodes every ~2s, so it uses noticeably more CPU than the
+default utterance backends. Omit `--live` for the lighter, preview-free loop.
+
 English uses Parakeet-TDT 0.6B (MLX) for STT and Kokoro-82M for TTS with
 English prompts. Precedence: `--system-prompt` > `--lang` builtin >
 `LLM_SYSTEM_PROMPT` env > language default. (`VOICE_LANG` env also works

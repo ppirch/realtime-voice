@@ -1,5 +1,8 @@
-from realtime_voice.app import listening_msg, parse_args, resolve_endpoint, resolve_lang_prompt
+from realtime_voice.app import (
+    build_backend, listening_msg, parse_args, resolve_endpoint, resolve_lang_prompt,
+)
 from realtime_voice.config import EN_SYSTEM_PROMPT, Settings, TH_SYSTEM_PROMPT
+from realtime_voice.stt_mlx import Utterance
 
 
 def _settings(prompt="ENV PROMPT", lang="th"):
@@ -54,3 +57,59 @@ def test_explicit_endpoint_flags_win_over_preset():
 def test_listening_msg_shows_pause():
     assert listening_msg(800) == "[listening — speak, then pause ~0.8s to send]"
     assert listening_msg(2500) == "[listening — speak, then pause ~2.5s to send]"
+
+
+def test_live_flag_selects_streaming_backend():
+    from unittest.mock import patch
+    from realtime_voice.stt_live import LiveWhisperMLXBackend
+    from realtime_voice.stt_mlx import Qwen3ASRMLXBackend
+    s = _settings()
+    args = parse_args(["--live"])
+    assert args.live is True
+    assert parse_args([]).live is False
+    with patch("realtime_voice.stt_live.MLXTranscriber"):
+        live = build_backend(args, s, Qwen3ASRMLXBackend, 0.02, 800, 15)
+        assert isinstance(live, LiveWhisperMLXBackend)
+        assert live.language == "th"
+
+    class FakeBackend:
+        def __init__(self, **kw):
+            self.kw = kw
+
+    plain = build_backend(parse_args([]), s, FakeBackend, 0.02, 800, 15)
+    assert isinstance(plain, FakeBackend)
+    assert (plain.kw["silence_ms"], plain.kw["max_utterance_s"]) == (800, 15)
+
+
+def test_mic_texts_routes_previews_to_callback():
+    from realtime_voice.app import mic_texts
+
+    class FakeASR:
+        def stream(self, chunks, sample_rate=16000):
+            yield Utterance("hel", is_final=False)
+            yield Utterance("hello", is_final=False)
+            yield Utterance("hello", is_final=True)
+
+    class FakeMic:
+        def chunks(self):
+            return iter([])
+
+    seen = []
+    got = list(mic_texts(FakeASR(), FakeMic(), 16000, on_preview=seen.append))
+    assert got == ["hello"]
+    assert seen == ["hel", "hello"]
+
+
+def test_mic_texts_ignores_previews_without_callback():
+    from realtime_voice.app import mic_texts
+
+    class FakeASR:
+        def stream(self, chunks, sample_rate=16000):
+            yield Utterance("hel", is_final=False)
+            yield Utterance("hello", is_final=True)
+
+    class FakeMic:
+        def chunks(self):
+            return iter([])
+
+    assert list(mic_texts(FakeASR(), FakeMic(), 16000)) == ["hello"]

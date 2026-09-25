@@ -8,10 +8,12 @@ except ImportError:
     sd = None
 
 class Microphone:
-    def __init__(self, sample_rate=16000, chunk_ms=80):
+    def __init__(self, sample_rate=16000, chunk_ms=80, qsize=32):
         if sd is None: raise RuntimeError('Install sounddevice: pip install sounddevice')
         self.sample_rate, self.chunk_ms = sample_rate, chunk_ms
-        self.q = queue.Queue(maxsize=32)
+        # Live-caption mode blocks ~1-2s per decode; a deeper queue
+        # (default 32 ≈ 2.5s) avoids dropping mic audio mid-decode.
+        self.q = queue.Queue(maxsize=qsize)
         self.stream = None
         self.peak = 0.0
         self.levels = deque(maxlen=256)
