@@ -140,3 +140,12 @@ def test_ielts_director_note_fires_at_part_boundaries():
     assert "Part 3" in ielts_director_note(7)
     assert ielts_director_note(8) is None
     assert "band scores" in ielts_director_note(12)
+
+
+def test_ielts_wants_scores_matches_phrasings():
+    from realtime_voice.config import ielts_wants_scores
+    assert ielts_wants_scores("Give me my band scores please")
+    assert ielts_wants_scores("How did I do?")
+    assert ielts_wants_scores("SCORE ME")
+    assert not ielts_wants_scores("I like running")
+    assert not ielts_wants_scores("The score was close")

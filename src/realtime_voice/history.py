@@ -23,6 +23,11 @@ class ConversationHistory:
     def __len__(self):
         return len(self._entries)
 
+    def transcript(self):
+        """Every turn, uncompressed. Used for full-fidelity final scoring;
+        the per-turn loop stays bounded via build()."""
+        return list(self._entries)
+
     def build(self, summarize=None):
         """Messages to send to the LLM. ``summarize`` takes a list of
         old messages and returns a short string; called only when new

@@ -42,3 +42,12 @@ def test_summary_grows_incrementally():
     assert seen == [['ผมชื่อต้น', 'ยินดีที่ได้รู้จัก'], ['ชอบกินข้าวผัด', 'อร่อยดี']]
     assert 's1' in msgs[0]['content'] and 's2' in msgs[0]['content']
     assert [m['content'] for m in msgs[1:]] == ['พรุ่งนี้เจอกัน', 'ได้เลย']
+
+
+def test_transcript_keeps_everything_build_does_not():
+    from realtime_voice.history import ConversationHistory
+    h = ConversationHistory(max_recent=2)
+    for i in range(5):
+        h.add("user", f"q{i}")
+    assert [m["content"] for m in h.transcript()] == [f"q{i}" for i in range(5)]
+    assert [m["content"] for m in h.build()] == ["q3", "q4"]

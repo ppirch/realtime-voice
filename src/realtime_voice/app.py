@@ -16,7 +16,14 @@ warnings.filterwarnings(
 )
 
 from .audio import Microphone, Speaker
-from .config import VOICE_BANNER, VOICE_SUMMARY, Settings, ielts_director_note
+from .config import (
+    IELTS_SCORING_PROMPT,
+    VOICE_BANNER,
+    VOICE_SUMMARY,
+    Settings,
+    ielts_director_note,
+    ielts_wants_scores,
+)
 from .history import ConversationHistory
 from .llm import StreamingLLM
 from .stt_endpoint import endpoint_threshold
@@ -239,6 +246,18 @@ def main(argv=None):
         prompt = summarize_instruction + joined
         return ''.join(llm.stream([{'role': 'user', 'content': prompt}]))
 
+    def ielts_scoring_messages(history):
+        """Full uncompressed transcript + rubric. Bypasses the bounded build
+        so band scores rest on the whole test, not the summary."""
+        lines = []
+        for m in history.transcript():
+            speaker = "Candidate" if m["role"] == "user" else "Examiner"
+            lines.append(f"{speaker}: {m['content']}")
+        return [
+            {"role": "system", "content": IELTS_SCORING_PROMPT},
+            {"role": "user", "content": "Full test transcript:\n" + "\n".join(lines)},
+        ]
+
     def handle_turn(text, n):
         print(f"You: {text}", flush=True)
         history.add("user", text)
@@ -248,10 +267,13 @@ def main(argv=None):
         print("Agent: ", end="", flush=True)
         messages = history.build(summarize=summarize_older)
         if args.preset == "ielts":
-            note = ielts_director_note(n)
-            if note:
-                # Transient: steers this reply only, never stored or summarized.
-                messages = messages + [{"role": "system", "content": note}]
+            if ielts_wants_scores(text):
+                messages = ielts_scoring_messages(history)
+            else:
+                note = ielts_director_note(n)
+                if note:
+                    # Transient: steers this reply only, never stored/summarized.
+                    messages = messages + [{"role": "system", "content": note}]
         for chunk in sentence_chunks(llm.stream(messages)):
             if first < 0:
                 first = time.time() - t0

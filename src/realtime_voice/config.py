@@ -33,6 +33,28 @@ IELTS_PART2_END = 7  # + long answer and 2 follow-ups, then Part 3
 IELTS_WRAP_AT = 12  # wind down and offer band scores
 
 
+IELTS_SCORING_PROMPT = (
+    "You are an IELTS speaking examiner giving final band scores. "
+    "Base your assessment ONLY on the candidate's turns in the full transcript below, "
+    "which covers the whole test uncompressed. Quote 1-2 of the candidate's actual "
+    "mistakes or strong phrases per criterion as evidence. "
+    "Give band scores (0-9, halves allowed) for fluency, vocabulary, grammar, "
+    "and pronunciation, one practical tip each, then an overall band. "
+    "Keep it speakable: short sentences, no lists, markdown, or symbols."
+)
+
+IELTS_SCORE_PATTERNS = (
+    "band score", "my score", "score me", "give me my scor",
+    "how did i do", "assess me", "evaluate me", "my result",
+)
+
+
+def ielts_wants_scores(text):
+    """True when the candidate asks for their scores (any wording)."""
+    lowered = text.lower()
+    return any(p in lowered for p in IELTS_SCORE_PATTERNS)
+
+
 def ielts_director_note(user_turns):
     """Transient steering note for the reply following user turn N.
 
