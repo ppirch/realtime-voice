@@ -42,6 +42,10 @@ def parse_args(argv=None):
                    help='system prompt (overrides language default and env)')
     p.add_argument('--preset', choices=('ielts',), default=None,
                    help='built-in role preset (overrides language default)')
+    p.add_argument('--silence-ms', type=int, default=None,
+                   help='trailing silence to end a turn (default 800, ielts 2500)')
+    p.add_argument('--max-utterance-s', type=int, default=None,
+                   help='longest single turn in seconds (default 15, ielts 120)')
     return p.parse_args(argv)
 
 
@@ -57,6 +61,17 @@ def resolve_lang_prompt(args, s):
         prompt = EN_SYSTEM_PROMPT if lang == "en" else TH_SYSTEM_PROMPT
         return lang, prompt
     return s.voice_lang, s.system_prompt
+
+
+def resolve_endpoint(args, s):
+    """Explicit flag > preset default > env (.env) > built-in default."""
+    from .config import PRESET_ENDPOINT
+    preset = PRESET_ENDPOINT.get(args.preset or "", {})
+    silence_ms = (args.silence_ms if args.silence_ms is not None
+                  else preset.get("silence_ms", s.silence_ms))
+    max_utterance_s = (args.max_utterance_s if args.max_utterance_s is not None
+                       else preset.get("max_utterance_s", s.max_utterance_s))
+    return silence_ms, max_utterance_s
 
 
 def mic_texts(asr, mic, sample_rate):
@@ -84,7 +99,11 @@ def mic_check(mic):
     return floor
 
 
-LISTENING_MSG = "[listening — speak, then pause ~1s to send]"
+LISTENING_MSG = "[listening — speak, then pause ~{pause}s to send]"
+
+
+def listening_msg(silence_ms):
+    return LISTENING_MSG.format(pause=f"{silence_ms / 1000:g}")
 
 
 def stdin_texts():
@@ -102,18 +121,21 @@ def main(argv=None):
     s = Settings.from_env()
     voice_lang, system_prompt = resolve_lang_prompt(args, s)
     s = replace(s, voice_lang=voice_lang, system_prompt=system_prompt)
+    silence_ms, max_utterance_s = resolve_endpoint(args, s)
 
     if args.stt_only:
         backend_cls = ParakeetMLXBackend if s.voice_lang == "en" else Qwen3ASRMLXBackend
-        print("STT-only mode — speak, pause ~1s to finalize, Ctrl-C to quit",
+        print(f"STT-only mode — speak, pause ~{silence_ms / 1000:g}s to finalize, Ctrl-C to quit",
               file=sys.stderr)
         with Microphone(s.sample_rate, s.input_chunk_ms) as mic:
             floor = mic_check(mic)
-            asr = Qwen3ASRStreaming(backend=backend_cls(silence_rms=endpoint_threshold(floor)))
-            print(LISTENING_MSG, file=sys.stderr, flush=True)
+            asr = Qwen3ASRStreaming(backend=backend_cls(
+                silence_rms=endpoint_threshold(floor),
+                silence_ms=silence_ms, max_utterance_s=max_utterance_s))
+            print(listening_msg(silence_ms), file=sys.stderr, flush=True)
             for text in mic_texts(asr, mic, s.sample_rate):
                 print(text, flush=True)
-                print(LISTENING_MSG, file=sys.stderr, flush=True)
+                print(listening_msg(silence_ms), file=sys.stderr, flush=True)
         return
 
     if not s.llm_model:
@@ -194,8 +216,10 @@ def main(argv=None):
             floor = mic_check(mic)
             print(f"endpoint threshold: {endpoint_threshold(floor):.3f}",
                   file=sys.stderr, flush=True)
-            asr = Qwen3ASRStreaming(backend=backend_cls(silence_rms=endpoint_threshold(floor)))
-            print(LISTENING_MSG, file=sys.stderr, flush=True)
+            asr = Qwen3ASRStreaming(backend=backend_cls(
+                silence_rms=endpoint_threshold(floor),
+                silence_ms=silence_ms, max_utterance_s=max_utterance_s))
+            print(listening_msg(silence_ms), file=sys.stderr, flush=True)
             for text in mic_texts(asr, mic, s.sample_rate):
                 n += 1
                 handle_turn(text, n)
@@ -205,4 +229,4 @@ def main(argv=None):
                 # Let the reverb tail arrive, then drop it before listening.
                 time.sleep(0.4)
                 mic.flush()
-                print(LISTENING_MSG, file=sys.stderr, flush=True)
+                print(listening_msg(silence_ms), file=sys.stderr, flush=True)

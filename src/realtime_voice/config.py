@@ -29,6 +29,10 @@ IELTS_EXAMINER_PROMPT = (
 )
 PRESETS = {"ielts": IELTS_EXAMINER_PROMPT}
 PRESET_LANG = {"ielts": "en"}
+# IELTS candidates pause to think mid-answer and speak 1-2 min in Part 2,
+# so the preset tolerates longer pauses and much longer turns.
+# Explicit --silence-ms / --max-utterance-s flags still win over these.
+PRESET_ENDPOINT = {"ielts": {"silence_ms": 2500, "max_utterance_s": 120}}
 
 
 @dataclass(frozen=True)
@@ -44,6 +48,8 @@ class Settings:
     sample_rate: int = 16000
     input_chunk_ms: int = 80
     tts_sample_rate: int = 24000
+    silence_ms: int = 800
+    max_utterance_s: int = 15
 
     @classmethod
     def from_env(cls):
@@ -62,4 +68,6 @@ class Settings:
             int(os.getenv("SAMPLE_RATE", "16000")),
             int(os.getenv("INPUT_CHUNK_MS", "80")),
             int(os.getenv("TTS_SAMPLE_RATE", "24000")),
+            int(os.getenv("SILENCE_MS", "800")),
+            int(os.getenv("MAX_UTTERANCE_S", "15")),
         )

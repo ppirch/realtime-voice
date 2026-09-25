@@ -1,4 +1,4 @@
-from realtime_voice.app import parse_args, resolve_lang_prompt
+from realtime_voice.app import listening_msg, parse_args, resolve_endpoint, resolve_lang_prompt
 from realtime_voice.config import EN_SYSTEM_PROMPT, Settings, TH_SYSTEM_PROMPT
 
 
@@ -32,3 +32,25 @@ def test_ielts_preset_implies_english():
     # explicit lang still wins for backends
     lang, _ = resolve_lang_prompt(parse_args(["--preset", "ielts", "--lang", "th"]), s)
     assert lang == "th"
+
+
+def test_endpoint_defaults_without_preset():
+    s = _settings()
+    assert resolve_endpoint(parse_args([]), s) == (800, 15)
+
+
+def test_ielts_preset_uses_patient_endpointing():
+    s = _settings()
+    assert resolve_endpoint(parse_args(["--preset", "ielts"]), s) == (2500, 120)
+
+
+def test_explicit_endpoint_flags_win_over_preset():
+    s = _settings()
+    args = parse_args(["--preset", "ielts", "--silence-ms", "1200",
+                       "--max-utterance-s", "60"])
+    assert resolve_endpoint(args, s) == (1200, 60)
+
+
+def test_listening_msg_shows_pause():
+    assert listening_msg(800) == "[listening — speak, then pause ~0.8s to send]"
+    assert listening_msg(2500) == "[listening — speak, then pause ~2.5s to send]"
