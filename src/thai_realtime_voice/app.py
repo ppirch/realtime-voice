@@ -8,7 +8,9 @@ from .history import ConversationHistory
 from .llm import StreamingLLM
 from .stt import Qwen3ASRStreaming
 from .stt_mlx import Qwen3ASRMLXBackend
+from .stt_parakeet import ParakeetMLXBackend
 from .tts_mms import MMSThaiTTS
+from .tts_kokoro import KokoroTTS
 from .text import sentence_chunks
 
 
@@ -42,7 +44,8 @@ def main(argv=None):
     s = Settings.from_env()
 
     if args.stt_only:
-        asr = Qwen3ASRStreaming(backend=Qwen3ASRMLXBackend())
+        backend = ParakeetMLXBackend() if s.voice_lang == "en" else Qwen3ASRMLXBackend()
+        asr = Qwen3ASRStreaming(backend=backend)
         print("STT-only mode — speak, pause ~1s to finalize, Ctrl-C to quit",
               file=sys.stderr)
         with Microphone(s.sample_rate, s.input_chunk_ms) as mic:
@@ -62,18 +65,30 @@ def main(argv=None):
         max_tokens=s.max_tokens,
         reasoning_effort=s.reasoning_effort or None,
     )
-    print("Loading speech models (MMS Thai TTS + Qwen3-ASR MLX)...", file=sys.stderr, flush=True)
-    asr = Qwen3ASRStreaming(backend=Qwen3ASRMLXBackend())
-    tts = MMSThaiTTS()
+    if s.voice_lang == "en":
+        print("Loading speech models (Kokoro English TTS + Parakeet MLX STT)...",
+              file=sys.stderr, flush=True)
+        asr = Qwen3ASRStreaming(backend=ParakeetMLXBackend())
+        tts = KokoroTTS()
+        summarize_instruction = (
+            'Summarize the following conversation briefly in English, '
+            'max 80 words, keeping names, preferences, and open items:\n'
+        )
+    else:
+        print("Loading speech models (MMS Thai TTS + Qwen3-ASR MLX)...",
+              file=sys.stderr, flush=True)
+        asr = Qwen3ASRStreaming(backend=Qwen3ASRMLXBackend())
+        tts = MMSThaiTTS()
+        summarize_instruction = (
+            'สรุปบทสนทนาต่อไปนี้สั้นๆ ไม่เกิน 80 คำ เป็นภาษาไทย '
+            'เน้นชื่อผู้ใช้ ความชอบ และเรื่องที่ค้างอยู่:\n'
+        )
     speaker = None if args.mute else Speaker(s.tts_sample_rate)
     history = ConversationHistory(max_recent=8)
 
     def summarize_older(msgs):
         joined = '\n'.join(f"{m['role']}: {m['content']}" for m in msgs)
-        prompt = (
-            'สรุปบทสนทนาต่อไปนี้สั้นๆ ไม่เกิน 80 คำ เป็นภาษาไทย '
-            'เน้นชื่อผู้ใช้ ความชอบ และเรื่องที่ค้างอยู่:\n' + joined
-        )
+        prompt = summarize_instruction + joined
         return ''.join(llm.stream([{'role': 'user', 'content': prompt}]))
 
     def handle_turn(text, n):

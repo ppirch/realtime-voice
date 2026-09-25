@@ -70,9 +70,20 @@ reply-length-bound. Prompt fix buys speakability + shorter turns, not latency.
   raw httpx and the SDK stays out of dependencies.
 
 ## Run 4 — reasoning_effort=low (2 live turns)
-
 - Probe: `reasoning_effort: 'low'` accepted, reasoning 5→2 chunks, content at
   ~2.3s. Nested `reasoning: {effort}` form performed worse (6.8s) — not used.
   Wired as `LLM_REASONING_EFFORT` (`reasoning_effort` on chat/completions,
   `reasoning.effort` on responses).
 - Live: first-audio **2.4s → 1.4s**, totals 3.2s / 1.8s. Sub-2s turn achieved.
+
+## Run 5 — English backends (Kokoro-82M + Parakeet-TDT, 2 live turns)
+
+- Roundtrip bench: Kokoro synth 2.9s cold / 0.71s warm (RTF 0.15), Parakeet
+  1.86s cold / 0.21s warm (RTF 0.04), transcription near-exact. `nvidia/`
+  repo id unsupported by parakeet-mlx — use `mlx-community/parakeet-tdt-0.6b-v2`.
+- Live (`VOICE_LANG=en`): first-audio **1.7s → 1.2s**, totals 2.4s / 1.7s,
+  synth 0.6s / 0.5s. English replies short and correct.
+- Caveats: `load_dotenv` resolves the repo `.env` via caller file, so an
+  explicit `LLM_SYSTEM_PROMPT` there overrides the per-language default
+  (comment it out when switching). Kokoro on non-English text degrades to
+  very slow synth instead of failing.

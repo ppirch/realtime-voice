@@ -14,6 +14,8 @@ dev = ["pytest>=8", "ruff>=0.6"]
 audio = ["sounddevice>=0.5"]
 stt-mlx = ["mlx-qwen3-asr>=0.4"]
 tts-local = ["transformers>=4", "torch"]
+stt-en = ["parakeet-mlx>=0.5"]
+tts-en = ["kokoro>=0.9"]
 
 [project.scripts]
 thai-voice = "thai_realtime_voice.app:main"

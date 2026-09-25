@@ -59,4 +59,17 @@ From OpenCode: `/voice-chat <opening topic>` relays between you and the loop.
 
 Per-turn timings (first-audio, chunks, synth) go to stderr; the transcript goes to stdout.
 
+## English mode
+
+```bash
+uv pip install -e '.[stt-en,tts-en]'
+brew install espeak-ng          # Kokoro phonemizer backend
+VOICE_LANG=en uv run thai-voice --text
+```
+
+English uses Parakeet-TDT 0.6B (MLX) for STT and Kokoro-82M for TTS with
+English prompts. Note: an explicit `LLM_SYSTEM_PROMPT` in `.env` overrides the
+per-language default, so comment it out (or set an English one) when switching
+languages — `load_dotenv` resolves the repo `.env` regardless of cwd.
+
 The realtime loop is designed for streaming operation. Default TTS is local MMS Thai (`facebook/mms-tts-tha`); live STT still needs a streaming backend (`Qwen3ASRStreaming.backend`), measurable offline via `benchmark/asr_benchmark.py` (mlx-qwen3-asr).
