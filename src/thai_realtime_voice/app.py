@@ -1,7 +1,15 @@
 import argparse
 import sys
 import time
+import warnings
 from dataclasses import replace
+
+# Known-noisy third-party warnings (torch deprecations, HF anonymous
+# rate-limit notice) — hidden for a clean voice-loop console.
+warnings.filterwarnings(
+    "ignore",
+    message=".*(torch\\.jit\\.script|weight_norm|dropout option adds dropout|unauthenticated requests).*",
+)
 
 from .config import Settings
 from .audio import Microphone, Speaker

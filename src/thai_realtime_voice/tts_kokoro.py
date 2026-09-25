@@ -13,7 +13,7 @@ class KokoroTTS:
     def __init__(self, lang_code='a', voice='af_heart'):
         from kokoro import KPipeline
         self.voice = voice
-        self.pipeline = KPipeline(lang_code=lang_code)
+        self.pipeline = KPipeline(lang_code=lang_code, repo_id='hexgrad/Kokoro-82M')
 
     def synthesize(self, text):
         if not text or not text.strip():
