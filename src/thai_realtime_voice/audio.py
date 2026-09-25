@@ -1,5 +1,6 @@
 import queue
 import threading
+from collections import deque
 import numpy as np
 try:
     import sounddevice as sd
@@ -13,6 +14,7 @@ class Microphone:
         self.q = queue.Queue(maxsize=32)
         self.stream = None
         self.peak = 0.0
+        self.levels = deque(maxlen=256)
     def device_name(self):
         try: return sd.query_devices(kind='input')['name']
         except Exception: return 'unknown'
@@ -25,6 +27,7 @@ class Microphone:
         chunk = np.asarray(indata[:,0], dtype=np.float32).copy()
         rms = float(np.sqrt((chunk ** 2).mean()))
         if rms > self.peak: self.peak = rms
+        self.levels.append(rms)
         try: self.q.put_nowait(chunk)
         except queue.Full:
             try: self.q.get_nowait()

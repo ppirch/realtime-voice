@@ -12,6 +12,15 @@ import numpy as np
 MODEL_SR = 16000
 
 
+def endpoint_threshold(noise_floor):
+    """Speech/silence boundary from measured room noise.
+
+    Fixed guesses (e.g. 0.02) break on quiet mics, so scale from the
+    actual floor with a sane minimum.
+    """
+    return max(noise_floor * 3, 0.008)
+
+
 class Utterance:
     def __init__(self, text, is_final=True):
         self.text = text

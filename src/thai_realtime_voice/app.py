@@ -19,7 +19,7 @@ from .audio import Microphone, Speaker
 from .history import ConversationHistory
 from .llm import StreamingLLM
 from .stt import Qwen3ASRStreaming
-from .stt_mlx import Qwen3ASRMLXBackend
+from .stt_mlx import Qwen3ASRMLXBackend, endpoint_threshold
 from .stt_parakeet import ParakeetMLXBackend
 from .tts_mms import MMSThaiTTS
 from .tts_kokoro import KokoroTTS
@@ -62,17 +62,22 @@ def mic_texts(asr, mic, sample_rate):
 
 
 def mic_check(mic):
-    """Print input device + live level so a dead mic is obvious.
+    """Print input device + live level, return measured noise floor.
 
-    Waits ~2s for the queue to fill; the buffered audio stays queued
-    (maxsize 32 ≈ 2.5s), so nothing the user says is lost.
+    Asks the user to speak during the ~2s window; buffered audio stays
+    queued (maxsize 32 ≈ 2.5s), so nothing said is lost.
     """
-    print(f"mic: {mic.device_name()}", file=sys.stderr, flush=True)
+    import statistics
+    print(f"mic: {mic.device_name()} — say a few words now...",
+          file=sys.stderr, flush=True)
     time.sleep(2.0)
     peak = mic.level()
-    print(f"mic level: {peak:.3f} " + ("(ok — speak, then pause ~1s)" if peak > 0.005
+    floor = statistics.median(mic.levels) if mic.levels else 0.0
+    ok = peak >= max(floor * 4, 0.006)
+    print(f"mic level: {peak:.3f} (room {floor:.3f}) " + ("(ok)" if ok
           else "(SILENT — check macOS Microphone permission for your terminal)"),
           file=sys.stderr, flush=True)
+    return floor
 
 
 def stdin_texts():
@@ -88,12 +93,12 @@ def main(argv=None):
     s = replace(s, voice_lang=voice_lang, system_prompt=system_prompt)
 
     if args.stt_only:
-        backend = ParakeetMLXBackend() if s.voice_lang == "en" else Qwen3ASRMLXBackend()
-        asr = Qwen3ASRStreaming(backend=backend)
+        backend_cls = ParakeetMLXBackend if s.voice_lang == "en" else Qwen3ASRMLXBackend
         print("STT-only mode — speak, pause ~1s to finalize, Ctrl-C to quit",
               file=sys.stderr)
         with Microphone(s.sample_rate, s.input_chunk_ms) as mic:
-            mic_check(mic)
+            floor = mic_check(mic)
+            asr = Qwen3ASRStreaming(backend=backend_cls(silence_rms=endpoint_threshold(floor)))
             for text in mic_texts(asr, mic, s.sample_rate):
                 print(text, flush=True)
         return
@@ -113,7 +118,7 @@ def main(argv=None):
     if s.voice_lang == "en":
         print("Loading speech models (Kokoro English TTS + Parakeet MLX STT)...",
               file=sys.stderr, flush=True)
-        asr = Qwen3ASRStreaming(backend=ParakeetMLXBackend())
+        backend_cls = ParakeetMLXBackend
         tts = KokoroTTS()
         summarize_instruction = (
             'Summarize the following conversation briefly in English, '
@@ -122,7 +127,7 @@ def main(argv=None):
     else:
         print("Loading speech models (MMS Thai TTS + Qwen3-ASR MLX)...",
               file=sys.stderr, flush=True)
-        asr = Qwen3ASRStreaming(backend=Qwen3ASRMLXBackend())
+        backend_cls = Qwen3ASRMLXBackend
         tts = MMSThaiTTS()
         summarize_instruction = (
             'สรุปบทสนทนาต่อไปนี้สั้นๆ ไม่เกิน 80 คำ เป็นภาษาไทย '
@@ -172,7 +177,10 @@ def main(argv=None):
                 break
     else:
         with Microphone(s.sample_rate, s.input_chunk_ms) as mic:
-            mic_check(mic)
+            floor = mic_check(mic)
+            print(f"endpoint threshold: {endpoint_threshold(floor):.3f}",
+                  file=sys.stderr, flush=True)
+            asr = Qwen3ASRStreaming(backend=backend_cls(silence_rms=endpoint_threshold(floor)))
             for text in mic_texts(asr, mic, s.sample_rate):
                 n += 1
                 handle_turn(text, n)
