@@ -1,7 +1,7 @@
 import pytest
 
 from realtime_voice.audio import Microphone
-from realtime_voice.stt_mlx import endpoint_threshold
+from realtime_voice.stt_endpoint import endpoint_threshold
 
 
 def test_flush_drops_captured_audio():

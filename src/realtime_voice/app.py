@@ -19,7 +19,8 @@ from .audio import Microphone, Speaker
 from .config import VOICE_BANNER, VOICE_SUMMARY, Settings
 from .history import ConversationHistory
 from .llm import StreamingLLM
-from .stt_mlx import Qwen3ASRMLXBackend, endpoint_threshold
+from .stt_endpoint import endpoint_threshold
+from .stt_mlx import Qwen3ASRMLXBackend
 from .stt_parakeet import ParakeetMLXBackend
 from .text import sentence_chunks
 from .tts_kokoro import KokoroTTS
@@ -139,10 +140,13 @@ def run_mic_loop(args, backend, mic, sample_rate, silence_ms,
 
 
 def build_voice(s):
-    """STT adapter class + TTS instance for a language. One row per lang."""
+    """STT adapter class + TTS factory for a language. One row per lang.
+
+    TTS is a factory (not an instance) so --stt-only never loads voices.
+    """
     if s.voice_lang == "en":
-        return ParakeetMLXBackend, KokoroTTS()
-    return Qwen3ASRMLXBackend, MMSThaiTTS()
+        return ParakeetMLXBackend, KokoroTTS
+    return Qwen3ASRMLXBackend, MMSThaiTTS
 
 
 def build_backend(args, s, backend_cls, threshold, silence_ms, max_utterance_s):
@@ -224,7 +228,8 @@ def main(argv=None):
         reasoning_effort=s.reasoning_effort or None,
     )
     print(VOICE_BANNER[s.voice_lang], file=sys.stderr, flush=True)
-    backend_cls, tts = build_voice(s)
+    backend_cls, tts_factory = build_voice(s)
+    tts = tts_factory()
     summarize_instruction = VOICE_SUMMARY[s.voice_lang]
     speaker = None if args.mute else Speaker(s.tts_sample_rate)
     history = ConversationHistory(max_recent=8)

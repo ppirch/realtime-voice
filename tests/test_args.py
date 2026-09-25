@@ -121,14 +121,11 @@ def test_mic_texts_ignores_previews_without_callback():
 
 
 def test_build_voice_dispatches_per_language():
-    from unittest.mock import patch
-
     from realtime_voice.app import build_voice
     from realtime_voice.stt_mlx import Qwen3ASRMLXBackend
     from realtime_voice.stt_parakeet import ParakeetMLXBackend
-    with patch("realtime_voice.app.KokoroTTS") as kokoro, \
-         patch("realtime_voice.app.MMSThaiTTS") as mms:
-        cls, tts = build_voice(_settings(lang="en"))
-        assert cls is ParakeetMLXBackend and tts is kokoro.return_value
-        cls, tts = build_voice(_settings(lang="th"))
-        assert cls is Qwen3ASRMLXBackend and tts is mms.return_value
+    from realtime_voice.tts_kokoro import KokoroTTS
+    from realtime_voice.tts_mms import MMSThaiTTS
+    # factories, not instances: --stt-only must never load TTS weights
+    assert build_voice(_settings(lang="en")) == (ParakeetMLXBackend, KokoroTTS)
+    assert build_voice(_settings(lang="th")) == (Qwen3ASRMLXBackend, MMSThaiTTS)
